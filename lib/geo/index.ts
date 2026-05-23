@@ -149,6 +149,28 @@ export function frameForHole(args: {
 }
 
 /**
+ * Initial Landing Zone positions along the straight tee→green-centroid
+ * line. Each entry in `fractions` is a value in `[0, 1]` interpreted as
+ * "this far from tee toward green centroid" — e.g. `[1/3, 2/3]` for a par 5
+ * places LZ1 a third of the way out and LZ2 two-thirds. Pass `[]` (par 3)
+ * or `[1/3]` (par 4) for fewer waypoints. The caller owns the fractions so
+ * the screen-level knob actually drives behaviour.
+ *
+ * Pure linear interpolation in lat/lng space — good enough at hole scale
+ * (≤ ~600 m); great-circle deviation is well under a metre.
+ */
+export function lzInitPositions(
+  tee: LatLng,
+  greenCentroid: LatLng,
+  fractions: readonly number[],
+): LatLng[] {
+  return fractions.map(f => ({
+    lat: tee.lat + (greenCentroid.lat - tee.lat) * f,
+    lng: tee.lng + (greenCentroid.lng - tee.lng) * f,
+  }))
+}
+
+/**
  * Axis-aligned bounding box covering the supplied points, in the
  * `[west, south, east, north]` BBox shape used elsewhere in the app.
  * Throws on empty input — callers should always have at least the tee +

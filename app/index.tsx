@@ -30,7 +30,7 @@ export default function HomeScreen() {
   const router = useRouter()
   const activeRound = useActiveRound()
   const hydrated = useIsHydrated()
-  const [courses, setCourses] = useState<CourseSummary[]>([])
+  const [courses, setCourses] = useState<CourseSummary[]>(listBundledCourses())
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -162,6 +162,13 @@ export default function HomeScreen() {
       )}
 
       <View style={styles.section}>
+        <TouchableOpacity
+          style={[styles.button, styles.buttonSecondary]}
+          onPress={() => router.push('/history' as never)}
+          disabled={busy}
+        >
+          <Text style={styles.buttonTextSecondary}>Round History</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.button, styles.buttonSecondary]}
           onPress={() => router.push('/spike' as never)}

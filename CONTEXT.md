@@ -50,6 +50,10 @@ Per-hole state within a Round. Holds the user-set pin position for that Hole and
 **Tee Shot**
 An optional recorded tee shot. Two GPS captures (start at the tee, mark at the ball), distance computed between them. User-initiated with the "Start Tee Shot" button; no automatic capture. May not exist for every Hole — opt-in per shot.
 
+**Landing Zone** (abbreviated LZ in code)
+A pre-shot planning waypoint placed on the map before a Tee Shot. Represents an intended landing spot on the fairway. Par 3 holes have 0 Landing Zones; par 4 holes have 1; par 5 holes have 2. Each Landing Zone anchors a segment in the planning distance chain: Tee → LZ1 → [LZ2 →] Pin. Ephemeral — not persisted to SQLite. Visible only when the player is far enough from the Pin that they have not yet played their Tee Shot (see `LZ_HIDE_WITHIN_M`). Can be overridden with a per-hole toggle.
+_Avoid_: "waypoint," "lay-up point," "planning point."
+
 **Hazard**
 Optional Tier 2 course data: bunkers, water hazards. Rendered on the map for visual context. Not used in any distance computation.
 
@@ -80,7 +84,7 @@ The act of downloading both raster (satellite) and vector tile data for a Course
 These terms drift in from commercial-golf-app speak or generic software speak. Don't use them in code or docs — they substitute for, or muddy, terms above.
 
 - "Yardage" → say **distance** (and use units from settings, not assumed yards).
-- "Layup" → not a concept in Eagle Eye. The Front/Pin/Back triplet handles the use case.
+- "Layup" → use **Landing Zone** instead.
 - "Hole-out," "make," "finish hole" → just **mark next hole** or **next hole**.
 - "Tracker," "GPS tracker" → Eagle Eye is a **rangefinder + scorecard**, not a tracker. We don't continuously track position to disk.
 - "Account," "user," "profile" → Eagle Eye has no users in the multi-user sense. Say **author** or **player** when referring to the human if needed.

@@ -9,6 +9,7 @@ import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator'
 import { db } from '@/db'
 import migrations from '@/drizzle/migrations'
 import { ensureHydrated } from '@/lib/round'
+import { ensureHydrated as ensureShotsHydrated } from '@/lib/shots'
 
 // Gluestack still imports SafeAreaView from 'react-native' (deprecated in 0.85).
 // We don't render any SafeAreaView ourselves — silence the upstream noise.
@@ -19,7 +20,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (success) {
-      ensureHydrated().catch(e => console.error('lib/round: hydrate failed', e))
+      ensureHydrated()
+        .then(() => ensureShotsHydrated())
+        .catch(e => console.error('hydrate failed', e))
     }
   }, [success])
 
@@ -48,6 +51,7 @@ export default function RootLayout() {
             name="round/scorecard"
             options={{ title: 'Scorecard' }}
           />
+          <Stack.Screen name="history" options={{ title: 'Round History' }} />
           <Stack.Screen name="spike" options={{ title: 'Spike: Map Test' }} />
         </Stack>
       )}

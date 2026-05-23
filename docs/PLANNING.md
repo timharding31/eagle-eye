@@ -59,7 +59,7 @@ Modules are grouped by domain concept, not by layer. Each one earns its place by
 
 | Module       | What it owns                                                                                                                                           | External interface (rough)                                                                                                                                                                  | Internal seams                                         |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `lib/geo`    | Pure geospatial computation.                                                                                                                           | `distanceMeters(a, b)`, `nearestPointOnPolygon(here, poly)`, `farthestPointOnPolygon(here, poly)`, `centroid(poly)`, `pointInPolygon(pt, poly)`                                             | Turf.js                                                |
+| `lib/geo`    | Pure geospatial computation.                                                                                                                           | `distanceMeters(a, b)`, `nearestPointOnPolygon(here, poly)`, `farthestPointOnPolygon(here, poly)`, `centroid(poly)`, `pointInPolygon(pt, poly)`, `lzInitPositions(tee, greenCentroid, count)` | Turf.js                                                |
 | `lib/course` | Course data loading and normalization. Shape is source-agnostic — bundled JSON, Overpass fetch, and future ML inference all produce the same `Course`. | `loadBundledCourse(slug)`, `loadInstalledCourse(id)`, `findNearby(here, radiusKm)` (Phase 5), `addCourseFromOverpass(osmId)` (Phase 5), `normalize(osmElements)` (shared with build script) | OSM tag parsing, Drizzle queries, Overpass HTTP client |
 | `lib/round`  | Round lifecycle. Owns the single-active-round invariant. State machine: `idle → active → ended`.                                                       | `startRound(courseId)`, `endRound(round, scores)`, `useActiveRound()`, `setPin(holeNum, latLng)`, `getHoleState(round, holeNum)`, `history()`                                               | Drizzle, Zustand store, stale-round detection          |
 | `lib/tiles`  | Offline tile management. Wraps MapLibre's offline-pack API for both raster (satellite) and vector layers.                                              | `prefetchForCourse(courseId)`, `prefetchStatus(courseId)`, `retryPrefetch(courseId)`, `vectorStyle`, `satelliteStyle`                                                                       | MapLibre's offline manager, URL templates              |
@@ -271,7 +271,35 @@ Vertical-slice phasing. Each phase ends with something testable on a real round.
 
 **Deliverable**: MVP done. Author can play full rounds on bundled courses, capture occasional drive distances, log scores.
 
-### Phase 5 — More courses + Find Nearby (2-4 days)
+### Phase 5 — Landing Zone planning overlay (1-2 days)
+
+Pre-shot planning waypoints on the hole map for par 4 and par 5 holes. All state is ephemeral (no SQLite changes). See CONTEXT.md for the "Landing Zone" definition.
+
+- Add `lzInitPositions(tee, greenCentroid, count: 0|1|2): LatLng[]` to `lib/geo`. Returns points at 1/3 and 2/3 of the straight line from tee to green centroid. Pure function, no seams.
+- In `FramedHoleScreen`, add local state:
+  - `lzPositions: LatLng[]` — 0, 1, or 2 positions, initialized from `lzInitPositions` on mount and on `holeNum` change.
+  - `lzToggle: 'auto' | 'force-shown' | 'force-hidden'` — resets to `'auto'` on `holeNum` change.
+- Two named constants (with range-hint comments) at the top of `[hole].tsx`:
+  - `LZ_HIDE_WITHIN_M` — threshold in metres below which LZs auto-hide because the player has left the tee. Starting value: `300 * YD_TO_M` (~274 m). Comment: `// tune if LZs hide too early on short par 4s`.
+  - `LZ_INIT_FRACTIONS` — `[1/3, 2/3]` along the tee→green centroid line.
+- Visibility rule:
+  ```
+  holePar >= 4 &&
+  (lzToggle === 'force-shown' ||
+   (lzToggle !== 'force-hidden' &&
+    (position === null || distanceMeters(position, pin) >= LZ_HIDE_WITHIN_M)))
+  ```
+- Tap model: existing `handleMapPress` → compute `distanceMeters` from tap to each waypoint in `[...lzPositions, pin]`, move the nearest one. LZ moves are clamped to `bboxOf(hole)` — LZs cannot be placed outside the hole envelope. Pin tap retains existing behaviour (must be inside green polygon).
+- Map overlay (when LZs visible):
+  - One `GeoJSONSource` + dashed `line` Layer per segment (tee→LZ1, LZ1→LZ2 if par 5, last LZ→pin).
+  - One `GeoJSONSource` + `circle` Layer per LZ (visually distinct from the pin and tee dots).
+  - One `GeoJSONSource` + `symbol` Layer per segment midpoint, displaying the segment distance as text.
+  - Distances: tee→LZ via `distanceMeters(tee, lz)`, last LZ→pin via `distanceMeters(lz, pin)`.
+- Toggle button on the map (small, beside the reframe button). Cycles `auto → force-shown → force-hidden → auto`. Icon or label should reflect current override state.
+
+**Deliverable**: on par 4/5 holes near the tee, two tap-to-place planning waypoints appear with segment distances overlaid on the map. Toggle button lets you force-show or force-hide for unusual holes.
+
+### Phase 6 — More courses + Find Nearby (2-4 days)
 
 - Run build script for 2-3 more local courses. Commit JSON.
 - `lib/course` graduates to real-seam: add `findNearby` and `addCourseFromOverpass` adapters. Both share `normalize.ts` with the build script.
@@ -279,7 +307,7 @@ Vertical-slice phasing. Each phase ends with something testable on a real round.
 
 **Deliverable**: friends can add their own local courses without a code change.
 
-### Phase 6 — Polish & ship (2-3 days)
+### Phase 7 — Polish & ship (2-3 days)
 
 - Single-screen onboarding (one screen, location permission grant, "Get Started").
 - Settings screen (3 toggles: default map style, units, about/credits).

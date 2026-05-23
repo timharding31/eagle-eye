@@ -1,8 +1,9 @@
 import type { InferSelectModel } from 'drizzle-orm'
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm'
 import { create } from 'zustand'
 
 import { db } from '@/db'
+import { _resetForActiveRoundChange as resetShots } from '@/lib/shots'
 import { holeStates, rounds } from './schema'
 
 export type Round = InferSelectModel<typeof rounds>
@@ -88,6 +89,7 @@ export async function startRound(courseId: string): Promise<Round> {
   }
   await db.insert(rounds).values(round)
   store.setState({ activeRound: round, states: {} })
+  resetShots()
   return round
 }
 
@@ -109,6 +111,7 @@ export async function endRound(
   if (store.getState().activeRound?.id === roundId) {
     store.setState({ activeRound: null, states: {} })
   }
+  resetShots()
 }
 
 export async function setPin(
@@ -149,6 +152,38 @@ export async function setCurrentHole(
 
 export async function history(): Promise<Round[]> {
   return db.select().from(rounds).orderBy(desc(rounds.startedAt))
+}
+
+export type RoundSummary = {
+  round: Round
+  totalScore: number | null
+  scoreCount: number
+}
+
+/**
+ * Past (ended) rounds with their score totals. Excludes the active round.
+ * `totalScore` is null when no scores were entered.
+ */
+export async function historyWithScores(): Promise<RoundSummary[]> {
+  const past = await db
+    .select()
+    .from(rounds)
+    .where(isNotNull(rounds.endedAt))
+    .orderBy(desc(rounds.startedAt))
+  const summaries: RoundSummary[] = []
+  for (const r of past) {
+    const rows = await db
+      .select()
+      .from(holeStates)
+      .where(eq(holeStates.roundId, r.id))
+    const scores = rows.map(h => h.score).filter((s): s is number => s != null)
+    summaries.push({
+      round: r,
+      totalScore: scores.length > 0 ? scores.reduce((a, b) => a + b, 0) : null,
+      scoreCount: scores.length,
+    })
+  }
+  return summaries
 }
 
 export function isStale(round: Round): boolean {
