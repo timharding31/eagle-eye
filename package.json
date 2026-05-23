@@ -1,0 +1,58 @@
+{
+  "name": "eagle-eye",
+  "version": "0.1.0",
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "build:course": "npx tsx scripts/build-course.ts",
+    "db:generate": "drizzle-kit generate",
+    "lint": "expo lint -- --no-error-on-unmatched-pattern",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "^56.0.12",
+    "@gluestack-style/react": "^1.0.57",
+    "@gluestack-ui/config": "^1.1.20",
+    "@gluestack-ui/themed": "^1.1.73",
+    "@maplibre/maplibre-react-native": "^11.2.1",
+    "@turf/turf": "^7.3.5",
+    "babel-preset-expo": "~56.0.12",
+    "drizzle-orm": "^0.45.2",
+    "expo": "~56.0.4",
+    "expo-constants": "~56.0.15",
+    "expo-dev-client": "~56.0.15",
+    "expo-linking": "~56.0.11",
+    "expo-location": "~56.0.13",
+    "expo-router": "~56.2.6",
+    "expo-splash-screen": "~56.0.10",
+    "expo-sqlite": "~56.0.4",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-gesture-handler": "~2.31.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.25.2",
+    "react-native-svg": "15.15.4",
+    "zustand": "^5.0.13"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/react": "~19.2.2",
+    "babel-plugin-inline-import": "^3.0.0",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~56.0.4",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.3",
+    "tsx": "^4.19.4",
+    "typescript": "~6.0.3"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.0"
+    }
+  }
+}

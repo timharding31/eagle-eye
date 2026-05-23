@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Eagle Eye",
+    "slug": "eagle-eye",
+    "version": "0.1.0",
+    "scheme": "eagle-eye",
+    "orientation": "portrait",
+    "android": {
+      "package": "com.timharding.eagleeye",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#1a472a"
+      },
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-location",
+      [
+        "expo-sqlite",
+        {
+          "enableFTS": false,
+          "useSQLCipher": false
+        }
+      ],
+      "@maplibre/maplibre-react-native",
+      "expo-splash-screen"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e70a0bc5-acf6-4985-b6af-eed2376cb68c"
+      }
+    }
+  }
+}
