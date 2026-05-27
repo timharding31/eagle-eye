@@ -1,7 +1,7 @@
-import distance from '@turf/distance'
-import nearestPointOnLine from '@turf/nearest-point-on-line'
-import turfCentroid from '@turf/centroid'
-import booleanPointInPolygon from '@turf/boolean-point-in-polygon'
+import { default as distance } from '@turf/distance'
+import { default as nearestPointOnLine } from '@turf/nearest-point-on-line'
+import { default as turfCentroid } from '@turf/centroid'
+import { default as booleanPointInPolygon } from '@turf/boolean-point-in-polygon'
 import {
   point as turfPoint,
   lineString,
@@ -129,8 +129,13 @@ export function frameForHole(args: {
 
   // Center of the bearing-aligned bbox, then bias by asymmetric padding so
   // the visual midpoint of the framed area matches the bbox center.
-  const padBiasForwardPx = (padding.bottom - padding.top) / 2
-  const padBiasSidePx = (padding.left - padding.right) / 2
+  // With bearing=bearingDeg(tee,green), green is up on screen and tee is
+  // down. Big top padding (e.g. a TopBar) means the visible area is in the
+  // lower half of the viewport, so the bbox should appear BELOW the
+  // viewport center — which means the camera target must be shifted UP
+  // (toward the green, +forward). Symmetric reasoning for the side bias.
+  const padBiasForwardPx = (padding.top - padding.bottom) / 2
+  const padBiasSidePx = (padding.right - padding.left) / 2
   const centerForward = (maxF + minF) / 2 + padBiasForwardPx * mPerPx
   const centerSide = (maxS + minS) / 2 + padBiasSidePx * mPerPx
 

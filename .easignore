@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+pnpm-lock.yaml.bak
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+.turbo/
+
+# Expo & React Native
+.expo/
+.expo-shared/
+eas.local.json
+android/
+ios/
+*.apk
+*.ipa
+
+# NOTE: drizzle/ is intentionally NOT ignored here — migrations are imported
+# at build time via babel-plugin-inline-import and must be uploaded to EAS.
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db

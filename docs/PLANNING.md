@@ -57,13 +57,13 @@ See [ADR-005](adr/0005-maplibre-offline-packs.md) for the renderer choice ration
 
 Modules are grouped by domain concept, not by layer. Each one earns its place by the deletion test: removing it would scatter complexity across multiple callers. Interfaces are small; implementations are substantial. Internal seams (Drizzle, Turf, MapLibre's native APIs) are not exposed through the external interface.
 
-| Module       | What it owns                                                                                                                                           | External interface (rough)                                                                                                                                                                  | Internal seams                                         |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Module       | What it owns                                                                                                                                           | External interface (rough)                                                                                                                                                                    | Internal seams                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | `lib/geo`    | Pure geospatial computation.                                                                                                                           | `distanceMeters(a, b)`, `nearestPointOnPolygon(here, poly)`, `farthestPointOnPolygon(here, poly)`, `centroid(poly)`, `pointInPolygon(pt, poly)`, `lzInitPositions(tee, greenCentroid, count)` | Turf.js                                                |
-| `lib/course` | Course data loading and normalization. Shape is source-agnostic — bundled JSON, Overpass fetch, and future ML inference all produce the same `Course`. | `loadBundledCourse(slug)`, `loadInstalledCourse(id)`, `findNearby(here, radiusKm)` (Phase 5), `addCourseFromOverpass(osmId)` (Phase 5), `normalize(osmElements)` (shared with build script) | OSM tag parsing, Drizzle queries, Overpass HTTP client |
-| `lib/round`  | Round lifecycle. Owns the single-active-round invariant. State machine: `idle → active → ended`.                                                       | `startRound(courseId)`, `endRound(round, scores)`, `useActiveRound()`, `setPin(holeNum, latLng)`, `getHoleState(round, holeNum)`, `history()`                                               | Drizzle, Zustand store, stale-round detection          |
-| `lib/tiles`  | Offline tile management. Wraps MapLibre's offline-pack API for both raster (satellite) and vector layers.                                              | `prefetchForCourse(courseId)`, `prefetchStatus(courseId)`, `retryPrefetch(courseId)`, `vectorStyle`, `satelliteStyle`                                                                       | MapLibre's offline manager, URL templates              |
-| `lib/shots`  | Tee shot recording. Small but earning its place — owns the in-flight "recording" state and the GPS snapshot logic.                                     | `startTeeShot(holeNum)`, `markTeeShot()`, `cancelTeeShot()`, `useCurrentTeeShot()`                                                                                                          | GPS sampling, Drizzle, in-flight Zustand state         |
+| `lib/course` | Course data loading and normalization. Shape is source-agnostic — bundled JSON, Overpass fetch, and future ML inference all produce the same `Course`. | `loadBundledCourse(slug)`, `loadInstalledCourse(id)`, `findNearby(here, radiusKm)` (Phase 5), `addCourseFromOverpass(osmId)` (Phase 5), `normalize(osmElements)` (shared with build script)   | OSM tag parsing, Drizzle queries, Overpass HTTP client |
+| `lib/round`  | Round lifecycle. Owns the single-active-round invariant. State machine: `idle → active → ended`.                                                       | `startRound(courseId)`, `endRound(round, scores)`, `useActiveRound()`, `setPin(holeNum, latLng)`, `getHoleState(round, holeNum)`, `history()`                                                 | Drizzle, Zustand store, stale-round detection          |
+| `lib/tiles`  | Offline tile management. Wraps MapLibre's offline-pack API for both raster (satellite) and vector layers.                                              | `prefetchForCourse(courseId)`, `prefetchStatus(courseId)`, `retryPrefetch(courseId)`, `vectorStyle`, `satelliteStyle`                                                                         | MapLibre's offline manager, URL templates              |
+| `lib/shots`  | Tee shot recording. Small but earning its place — owns the in-flight "recording" state and the GPS snapshot logic.                                     | `startTeeShot(holeNum)`, `markTeeShot()`, `cancelTeeShot()`, `useCurrentTeeShot()`                                                                                                            | GPS sampling, Drizzle, in-flight Zustand state         |
 
 #### Seam status
 
@@ -98,7 +98,7 @@ eagle-eye/
 ├── db/
 │   └── index.ts              # Drizzle client setup
 ├── courses/                  # Bundled course JSON (committed, version-controlled)
-│   ├── home.json
+│   ├── presidio.json
 │   └── ...
 ├── scripts/
 │   └── build-course.ts       # Node script: OSM ID → courses/<slug>.json
@@ -236,7 +236,7 @@ Vertical-slice phasing. Each phase ends with something testable on a real round.
 - Grow `lib/geo` with `distanceMeters`, `nearestPointOnPolygon`, `farthestPointOnPolygon`, `centroid`. Pure functions, no seams.
 - Grow `lib/course` (single-adapter): `loadBundledCourse(slug)`, `normalize(osmElements)`.
 - `scripts/build-course.ts` Node script: takes OSM ID, calls `lib/course/normalize.ts`, writes `courses/<slug>.json`.
-- Run script against home course. Commit `courses/home.json`.
+- Run script against home course. Commit `courses/presidio.json`.
 - One screen at `app/round/[hole].tsx`: hardcoded hole, F/P/B numbers, manual prev/next, tap-on-green to move pin (in-memory, no persistence yet).
 - Vector map only via MapLibre. No satellite, no offline.
 

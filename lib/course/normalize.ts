@@ -5,6 +5,8 @@ import type {
   GeoPoint,
   Position,
   BBox,
+  MissingHole,
+  NormalizeResult,
 } from './types'
 
 export type OsmElement = {
@@ -29,7 +31,11 @@ export type OsmResult = {
 
 type Candidate<T> = { ref: string | null; value: T; el: OsmElement }
 
-export function normalize(osmId: string, osmResult: OsmResult): Course {
+export function normalize(
+  osmId: string,
+  osmResult: OsmResult,
+  opts: { source?: Course['source'] } = {},
+): NormalizeResult {
   const elements = osmResult.elements
 
   const nodeById = new Map<number, OsmElement>()
@@ -74,9 +80,13 @@ export function normalize(osmId: string, osmResult: OsmResult): Course {
     }
   }
 
-  if (greens.length === 0) {
+  // Don't throw on missing greens — record them as missing-hole entries so
+  // tap-to-fix can ask the player to provide green centres. We only throw
+  // if there are zero usable hints at all (no greens AND no hole-ways);
+  // there's nothing to walk through in that case.
+  if (greens.length === 0 && holeWays.length === 0) {
     throw new Error(
-      'No golf=green polygons found in OSM data — check tagging or relation membership',
+      'No golf=green polygons or golf=hole ways found in OSM data — check tagging or relation membership',
     )
   }
 
@@ -140,7 +150,7 @@ export function normalize(osmId: string, osmResult: OsmResult): Course {
   }
 
   const holes: Hole[] = []
-  const skipped: string[] = []
+  const missing: MissingHole[] = []
 
   for (const ref of refs) {
     const num = parseInt(ref, 10)
@@ -166,26 +176,28 @@ export function normalize(osmId: string, osmResult: OsmResult): Course {
     }
 
     if (!green || !tee) {
-      skipped.push(ref)
+      missing.push({ num, par, tee, holeWay: holeWay?.value })
       continue
     }
     holes.push({ num, par, green, tee })
   }
 
-  if (holes.length === 0) {
-    throw new Error(
-      `Found ${greens.length} green(s) and ${tees.length} tee(s) but could not assemble any hole — check ref tags`,
-    )
-  }
+  // If hole bounds collapse (e.g. no holes assembled at all), fall back to
+  // the union of every known feature so tap-to-fix has a viewport to frame.
+  const bounds =
+    holes.length > 0
+      ? computeBoundsFromHoles(holes)
+      : computeBoundsFromHints(greens, tees, holeWays)
 
-  return {
+  const course: Course = {
     id: `osm-${osmId}`,
     name: courseName ?? `Course ${osmId}`,
-    source: 'bundled',
-    bounds: computeBounds(holes),
+    source: opts.source ?? 'bundled',
+    bounds,
     holes,
     metadata: { addedAt: Date.now(), osmId },
   }
+  return { course, missing }
 }
 
 function wayToPolygon(
@@ -251,7 +263,7 @@ function haversineMeters(a: Position, b: Position): number {
   return 2 * R * Math.asin(Math.sqrt(s))
 }
 
-function computeBounds(holes: Hole[]): BBox {
+function computeBoundsFromHoles(holes: Hole[]): BBox {
   let w = Infinity
   let s = Infinity
   let e = -Infinity
@@ -269,5 +281,27 @@ function computeBounds(holes: Hole[]): BBox {
     if (lat < s) s = lat
     if (lat > n) n = lat
   }
+  return [w, s, e, n]
+}
+
+function computeBoundsFromHints(
+  greens: Candidate<GeoPolygon>[],
+  tees: Candidate<GeoPoint>[],
+  holeWays: Candidate<Position[]>[],
+): BBox {
+  let w = Infinity
+  let s = Infinity
+  let e = -Infinity
+  let n = -Infinity
+  const acc = ([lng, lat]: Position) => {
+    if (lng < w) w = lng
+    if (lng > e) e = lng
+    if (lat < s) s = lat
+    if (lat > n) n = lat
+  }
+  for (const g of greens) for (const p of g.value.coordinates[0]) acc(p)
+  for (const t of tees) acc(t.value.coordinates)
+  for (const h of holeWays) for (const p of h.value) acc(p)
+  if (!Number.isFinite(w)) return [0, 0, 0, 0]
   return [w, s, e, n]
 }

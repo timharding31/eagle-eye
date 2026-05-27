@@ -6,55 +6,61 @@ import {
   Text,
   View,
 } from 'react-native'
+import { useRouter } from 'expo-router'
 
-import { listBundledCourses, type CourseSummary } from '@/lib/course'
+import { Card } from '@/components/Card'
+import { ScreenShell } from '@/components/ScreenShell'
+import { TopBar } from '@/components/TopBar'
+import { listAllCourses, type CourseSummary } from '@/lib/course'
 import { historyWithScores, type RoundSummary } from '@/lib/round'
+import { colors, space, type } from '@/lib/theme'
 
 export default function HistoryScreen() {
+  const router = useRouter()
   const [summaries, setSummaries] = useState<RoundSummary[] | null>(null)
-  const [courses] = useState(() => listBundledCourses())
+  const [courses, setCourses] = useState<CourseSummary[]>([])
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
-    historyWithScores()
-      .then(setSummaries)
+    Promise.all([historyWithScores(), listAllCourses()])
+      .then(([summaries, courses]) => {
+        setSummaries(summaries)
+        setCourses(courses)
+      })
       .catch(e => setErr(String(e)))
   }, [])
 
-  if (err) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{err}</Text>
-      </View>
-    )
-  }
-
-  if (!summaries) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color="#1a472a" />
-        <Text style={styles.centerText}>Loading…</Text>
-      </View>
-    )
-  }
-
-  if (summaries.length === 0) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.emptyTitle}>No rounds yet</Text>
-        <Text style={styles.emptyBody}>
-          Finished rounds will show up here once you save a scorecard.
-        </Text>
-      </View>
-    )
-  }
-
   return (
-    <ScrollView contentContainerStyle={styles.scroll}>
-      {summaries.map(s => (
-        <HistoryRow key={s.round.id} summary={s} courses={courses} />
-      ))}
-    </ScrollView>
+    <ScreenShell>
+      <TopBar
+        title="ROUND HISTORY"
+        subtitle="ALL FINISHED ROUNDS"
+        onBack={() => router.back()}
+      />
+      {err ? (
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{err}</Text>
+        </View>
+      ) : !summaries ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.centerText}>Loading…</Text>
+        </View>
+      ) : summaries.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyTitle}>No rounds yet</Text>
+          <Text style={styles.emptyBody}>
+            Finished rounds will show up here once you save a scorecard.
+          </Text>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scroll}>
+          {summaries.map(s => (
+            <HistoryRow key={s.round.id} summary={s} courses={courses} />
+          ))}
+        </ScrollView>
+      )}
+    </ScreenShell>
   )
 }
 
@@ -69,7 +75,7 @@ function HistoryRow({
   const courseName =
     courses.find(c => c.slug === round.courseId)?.name ?? round.courseId
   return (
-    <View style={styles.row}>
+    <Card variant="surface" padding="md" style={styles.row}>
       <View style={styles.rowMain}>
         <Text style={styles.rowCourse}>{courseName}</Text>
         <Text style={styles.rowDate}>{formatDate(round.startedAt)}</Text>
@@ -83,9 +89,9 @@ function HistoryRow({
         <Text style={styles.rowScoreNum}>
           {totalScore == null ? '—' : totalScore}
         </Text>
-        <Text style={styles.rowScoreLabel}>score</Text>
+        <Text style={styles.rowScoreLabel}>SCORE</Text>
       </View>
-    </View>
+    </Card>
   )
 }
 
@@ -99,54 +105,44 @@ function formatDate(ts: number): string {
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: 16, gap: 8 },
+  scroll: { padding: space.marginMobile, gap: space.sm },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
     gap: 12,
-    backgroundColor: '#F9FAFB',
   },
-  centerText: { color: '#00214C', fontSize: 14 },
-  emptyTitle: {
-    color: '#00214C',
-    fontSize: 20,
-    fontWeight: '700',
-  },
+  centerText: { ...type.bodyMd, color: colors.onSurfaceVariant },
+  emptyTitle: { ...type.headlineMd, color: colors.primary },
   emptyBody: {
-    color: '#6B7280',
-    fontSize: 14,
+    ...type.bodyMd,
+    color: colors.onSurfaceVariant,
     textAlign: 'center',
     maxWidth: 280,
   },
-  errorText: { color: '#DC2626', fontSize: 14 },
+  errorText: { ...type.bodyMd, color: colors.error },
 
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    gap: 12,
+    gap: space.md,
   },
   rowMain: { flex: 1, gap: 2 },
-  rowCourse: { color: '#00214C', fontSize: 16, fontWeight: '700' },
-  rowDate: { color: '#6B7280', fontSize: 13 },
-  rowPartial: { color: '#CF9F37', fontSize: 12, fontWeight: '600' },
+  rowCourse: { ...type.headlineMd, color: colors.primary },
+  rowDate: { ...type.bodyMd, color: colors.onSurfaceVariant },
+  rowPartial: {
+    color: colors.error,
+    fontSize: 12,
+    fontFamily: 'Sora_600SemiBold',
+  },
   rowScore: { alignItems: 'center', minWidth: 56 },
   rowScoreNum: {
-    color: '#03563D',
-    fontSize: 28,
-    fontWeight: '800',
+    color: colors.primary,
+    fontSize: 32,
+    fontFamily: 'Sora_800ExtraBold',
     fontVariant: ['tabular-nums'],
+    lineHeight: 36,
   },
-  rowScoreLabel: {
-    color: '#6B7280',
-    fontSize: 10,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
+  rowScoreLabel: { ...type.labelXs, marginTop: 2 },
 })

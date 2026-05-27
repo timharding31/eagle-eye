@@ -4,12 +4,22 @@ import { GluestackUIProvider } from '@gluestack-ui/themed'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { ActivityIndicator, LogBox, StyleSheet, Text, View } from 'react-native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator'
+import { useFonts } from 'expo-font'
+import {
+  Sora_400Regular,
+  Sora_500Medium,
+  Sora_600SemiBold,
+  Sora_700Bold,
+  Sora_800ExtraBold,
+} from '@expo-google-fonts/sora'
 
 import { db } from '@/db'
 import migrations from '@/drizzle/migrations'
 import { ensureHydrated } from '@/lib/round'
 import { ensureHydrated as ensureShotsHydrated } from '@/lib/shots'
+import { colors, type } from '@/lib/theme'
 
 // Gluestack still imports SafeAreaView from 'react-native' (deprecated in 0.85).
 // We don't render any SafeAreaView ourselves — silence the upstream noise.
@@ -17,6 +27,13 @@ LogBox.ignoreLogs([/SafeAreaView has been deprecated/])
 
 export default function RootLayout() {
   const { success, error } = useMigrations(db, migrations)
+  const [fontsLoaded] = useFonts({
+    Sora_400Regular,
+    Sora_500Medium,
+    Sora_600SemiBold,
+    Sora_700Bold,
+    Sora_800ExtraBold,
+  })
 
   useEffect(() => {
     if (success) {
@@ -27,35 +44,27 @@ export default function RootLayout() {
   }, [success])
 
   return (
-    <GluestackUIProvider config={config}>
-      <StatusBar style="light" />
-      {error ? (
-        <BootMessage
-          text={`Database migration failed:\n${error.message}`}
-          error
-        />
-      ) : !success ? (
-        <BootMessage text="Preparing database…" busy />
-      ) : (
-        <Stack
-          screenOptions={{
-            headerStyle: { backgroundColor: '#00214C' },
-            headerTintColor: '#ffffff',
-            headerTitleStyle: { fontWeight: 'bold' },
-            contentStyle: { backgroundColor: '#F9FAFB' },
-          }}
-        >
-          <Stack.Screen name="index" options={{ title: 'Eagle Eye' }} />
-          <Stack.Screen name="round/[hole]" options={{ title: 'Hole' }} />
-          <Stack.Screen
-            name="round/scorecard"
-            options={{ title: 'Scorecard' }}
+    <SafeAreaProvider>
+      <GluestackUIProvider config={config}>
+        <StatusBar style="light" />
+        {error ? (
+          <BootMessage
+            text={`Database migration failed:\n${error.message}`}
+            error
           />
-          <Stack.Screen name="history" options={{ title: 'Round History' }} />
-          <Stack.Screen name="spike" options={{ title: 'Spike: Map Test' }} />
-        </Stack>
-      )}
-    </GluestackUIProvider>
+        ) : !success || !fontsLoaded ? (
+          <BootMessage text="Preparing…" busy />
+        ) : (
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.surface },
+              animation: 'fade',
+            }}
+          />
+        )}
+      </GluestackUIProvider>
+    </SafeAreaProvider>
   )
 }
 
@@ -70,7 +79,7 @@ function BootMessage({
 }) {
   return (
     <View style={styles.boot}>
-      {busy ? <ActivityIndicator color="#1a472a" /> : null}
+      {busy ? <ActivityIndicator color={colors.primary} /> : null}
       <Text style={[styles.bootText, error && styles.bootTextError]}>
         {text}
       </Text>
@@ -85,8 +94,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
     gap: 12,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.surface,
   },
-  bootText: { color: '#00214C', textAlign: 'center', fontSize: 16 },
-  bootTextError: { color: '#DC2626' },
+  bootText: { ...type.bodyMd, textAlign: 'center' },
+  bootTextError: { color: colors.error },
 })

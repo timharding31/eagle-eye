@@ -7,18 +7,23 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 
-import { loadBundledCourse, type Course } from '@/lib/course'
+import { Button } from '@/components/Button'
+import { Card } from '@/components/Card'
+import { ScreenShell } from '@/components/ScreenShell'
+import { SectionLabel } from '@/components/SectionLabel'
+import { TopBar } from '@/components/TopBar'
+import { loadCourse, type Course } from '@/lib/course'
 import {
   endRound,
   getHoleState,
   useActiveRound,
   useIsHydrated,
 } from '@/lib/round'
+import { colors, radius, space, type } from '@/lib/theme'
 
 export default function ScorecardScreen() {
   const router = useRouter()
@@ -42,10 +47,9 @@ export default function ScorecardScreen() {
     let cancelled = false
     ;(async () => {
       try {
-        const c = await loadBundledCourse(round.courseId)
+        const c = await loadCourse(round.courseId)
         if (cancelled) return
         setCourse(c)
-        // Pre-fill from any persisted hole scores.
         const initial: Record<number, string> = {}
         for (const h of c.holes) {
           const hs = await getHoleState(round.id, h.num)
@@ -84,7 +88,6 @@ export default function ScorecardScreen() {
   }
 
   const handleScoreChange = (holeNum: number, raw: string) => {
-    // Allow empty, or 1-2 digit numeric input. Strip everything else.
     const cleaned = raw.replace(/[^0-9]/g, '').slice(0, 2)
     setScores(s => {
       if (cleaned === '') {
@@ -102,6 +105,9 @@ export default function ScorecardScreen() {
     setSaveError(null)
     try {
       await endRound(round.id, parsedScores)
+      // Pop the round + scorecard back to the home root so the system
+      // back button can't return into a finished round.
+      if (router.canGoBack()) router.dismissAll()
       router.replace('/' as never)
     } catch (e) {
       setSaveError(String(e))
@@ -115,74 +121,81 @@ export default function ScorecardScreen() {
     enteredCount === course.holes.length ? total - totalPar : null
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
+    <ScreenShell>
+      <TopBar
+        title="SCORECARD"
+        subtitle={`${course.name.toUpperCase()}`}
+        onBack={() => router.back()}
+      />
+      <KeyboardAvoidingView
+        style={styles.kav}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.summary}>
-          <Text style={styles.summaryLabel}>Scorecard</Text>
-          <Text style={styles.summaryTotal}>
-            {enteredCount === 0 ? '—' : total}
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Card variant="elevated" padding="lg" style={styles.summary}>
+            <SectionLabel>TOTAL</SectionLabel>
+            <Text style={styles.summaryTotal}>
+              {enteredCount === 0 ? '—' : total}
+            </Text>
             <Text style={styles.summaryPar}>
-              {' '}
-              / par {totalPar}
+              {`/ par ${totalPar}`}
               {relToPar != null
                 ? relToPar === 0
                   ? '  (E)'
                   : `  (${relToPar > 0 ? '+' : ''}${relToPar})`
                 : ''}
             </Text>
-          </Text>
-          <Text style={styles.summaryMeta}>
-            {enteredCount} / {course.holes.length} holes entered
-          </Text>
-        </View>
+            <Text style={styles.summaryMeta}>
+              {enteredCount} / {course.holes.length} holes entered
+            </Text>
+          </Card>
 
-        <View style={styles.gridHeader}>
-          <Text style={[styles.gridHeaderCell, styles.cellHole]}>Hole</Text>
-          <Text style={[styles.gridHeaderCell, styles.cellPar]}>Par</Text>
-          <Text style={[styles.gridHeaderCell, styles.cellScore]}>Score</Text>
-        </View>
+          <Card variant="surface" padding="md" style={styles.gridCard}>
+            <View style={styles.gridHeader}>
+              <Text style={[styles.gridHeaderCell, styles.cellHole]}>HOLE</Text>
+              <Text style={[styles.gridHeaderCell, styles.cellPar]}>PAR</Text>
+              <Text style={[styles.gridHeaderCell, styles.cellScore]}>
+                SCORE
+              </Text>
+            </View>
 
-        {course.holes.map(h => (
-          <ScoreRow
-            key={h.num}
-            holeNum={h.num}
-            par={h.par}
-            value={scores[h.num] ?? ''}
-            onChange={v => handleScoreChange(h.num, v)}
+            {course.holes.map((h, i) => (
+              <ScoreRow
+                key={h.num}
+                holeNum={h.num}
+                par={h.par}
+                value={scores[h.num] ?? ''}
+                onChange={v => handleScoreChange(h.num, v)}
+                divider={i < course.holes.length - 1}
+              />
+            ))}
+          </Card>
+
+          {saveError && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{saveError}</Text>
+            </View>
+          )}
+
+          <Button
+            label={saving ? 'Saving…' : 'Save & End Round'}
+            onPress={handleSave}
+            disabled={saving}
+            style={{ marginTop: space.md }}
           />
-        ))}
-
-        {saveError && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{saveError}</Text>
-          </View>
-        )}
-
-        <TouchableOpacity
-          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          <Text style={styles.saveButtonText}>
-            {saving ? 'Saving…' : 'Save & End Round'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => router.back()}
-          disabled={saving}
-        >
-          <Text style={styles.cancelButtonText}>Back to round</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <Button
+            label="Back to round"
+            variant="ghost"
+            size="md"
+            onPress={() => router.back()}
+            disabled={saving}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ScreenShell>
   )
 }
 
@@ -191,14 +204,16 @@ function ScoreRow({
   par,
   value,
   onChange,
+  divider,
 }: {
   holeNum: number
   par: number
   value: string
   onChange: (v: string) => void
+  divider: boolean
 }) {
   return (
-    <View style={styles.gridRow}>
+    <View style={[styles.gridRow, divider && styles.gridRowDivider]}>
       <Text style={[styles.cellHole, styles.cellHoleText]}>{holeNum}</Text>
       <Text style={[styles.cellPar, styles.cellParText]}>{par}</Text>
       <TextInput
@@ -208,7 +223,7 @@ function ScoreRow({
         keyboardType="number-pad"
         maxLength={2}
         placeholder="—"
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor={colors.onSurfaceMuted}
         returnKeyType="next"
         textAlign="center"
         accessibilityLabel={`Score for hole ${holeNum}`}
@@ -219,111 +234,83 @@ function ScoreRow({
 
 function CenterMessage({ text, busy }: { text: string; busy?: boolean }) {
   return (
-    <View style={styles.centerMsg}>
-      {busy ? <ActivityIndicator color="#1a472a" /> : null}
-      <Text style={styles.centerMsgText}>{text}</Text>
-    </View>
+    <ScreenShell>
+      <View style={styles.centerMsg}>
+        {busy ? <ActivityIndicator color={colors.primary} /> : null}
+        <Text style={styles.centerMsgText}>{text}</Text>
+      </View>
+    </ScreenShell>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  scroll: { padding: 16, gap: 8 },
+  kav: { flex: 1 },
+  scroll: { padding: space.marginMobile, gap: space.sm },
 
-  summary: {
-    backgroundColor: '#00214C',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-    alignItems: 'center',
-    gap: 4,
-  },
-  summaryLabel: {
-    color: '#B3E0D5',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-  },
+  summary: { alignItems: 'center', gap: space.xs },
   summaryTotal: {
-    color: '#FFFFFF',
-    fontSize: 36,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
+    ...type.displayHero,
+    color: colors.primary,
+    marginTop: space.xs,
   },
-  summaryPar: { color: '#B3E0D5', fontSize: 16, fontWeight: '500' },
-  summaryMeta: { color: '#B3E0D5', fontSize: 12 },
+  summaryPar: { ...type.bodyLg, color: colors.onSurfaceVariant },
+  summaryMeta: { ...type.bodyMd, color: colors.onSurfaceMuted },
 
+  gridCard: { padding: 0, overflow: 'hidden' },
   gridHeader: {
     flexDirection: 'row',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    backgroundColor: colors.surfaceLowest,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
   },
-  gridHeaderCell: {
-    color: '#00214C',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
+  gridHeaderCell: { ...type.labelXs },
   gridRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    paddingVertical: 8,
+    paddingHorizontal: space.md,
   },
-  cellHole: { width: 64 },
-  cellHoleText: { fontSize: 18, fontWeight: '700', color: '#00214C' },
-  cellPar: { width: 64 },
-  cellParText: { fontSize: 16, color: '#6B7280' },
+  gridRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.outlineVariant,
+  },
+  cellHole: { width: 56 },
+  cellHoleText: {
+    fontSize: 18,
+    fontFamily: 'Sora_700Bold',
+    color: colors.primary,
+  },
+  cellPar: { width: 56 },
+  cellParText: {
+    fontSize: 16,
+    fontFamily: 'Sora_400Regular',
+    color: colors.onSurfaceVariant,
+  },
   cellScore: { flex: 1 },
   cellScoreInput: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#00214C',
+    fontSize: 20,
+    fontFamily: 'Sora_700Bold',
+    color: colors.primary,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.outlineVariant,
+    backgroundColor: colors.surfaceLow,
     fontVariant: ['tabular-nums'],
   },
 
-  saveButton: {
-    marginTop: 16,
-    backgroundColor: '#03563D',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  saveButtonDisabled: { opacity: 0.6 },
-  saveButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
-
-  cancelButton: {
-    marginTop: 6,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  cancelButtonText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
-
   errorBox: {
-    backgroundColor: '#FEE2E2',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#DC2626',
-    marginTop: 8,
+    backgroundColor: colors.errorContainer,
+    padding: space.md,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.error,
+    marginTop: space.sm,
   },
-  errorText: { color: '#DC2626', fontSize: 13 },
+  errorText: { ...type.bodyMd, color: colors.primary },
 
   centerMsg: {
     flex: 1,
@@ -331,7 +318,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
     gap: 12,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.surface,
   },
-  centerMsgText: { color: '#00214C', textAlign: 'center', fontSize: 16 },
+  centerMsgText: { ...type.bodyMd, textAlign: 'center' },
 })

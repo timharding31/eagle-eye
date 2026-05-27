@@ -27,6 +27,21 @@ export type Course = {
   metadata: { addedAt: number; osmId?: string }
 }
 
+// Data about a hole that OSM hinted at but couldn't fully assemble — used
+// by the tap-to-fix flow to walk the player through providing greens.
+export type MissingHole = {
+  num: number
+  par: number
+  tee?: GeoPoint
+  holeWay?: Position[]
+}
+
+export type NormalizeResult = {
+  course: Course
+  missing: MissingHole[]
+}
+
 export function isCourseValid(course: Course): boolean {
+  if (course.holes.length === 0) return false
   return course.holes.every(h => h.green && h.tee)
 }

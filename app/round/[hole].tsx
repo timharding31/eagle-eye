@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import type { LayoutChangeEvent, NativeSyntheticEvent } from 'react-native'
 import {
   View,
@@ -6,7 +6,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Animated,
+  useWindowDimensions,
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Map,
@@ -21,7 +24,8 @@ import {
 } from '@maplibre/maplibre-react-native'
 import * as Location from 'expo-location'
 
-import { Hole, loadBundledCourse, type Course } from '@/lib/course'
+import { IconAction, TopBar } from '@/components/TopBar'
+import { Hole, loadCourse, type Course } from '@/lib/course'
 import type { BBox } from '@/lib/course/types'
 import {
   bboxOf,
@@ -49,6 +53,7 @@ import {
   useCurrentTeeShot,
   useTeeShotForHole,
 } from '@/lib/shots'
+import { colors, fonts, radius, shadows, space, type } from '@/lib/theme'
 import {
   satelliteStyle,
   usePrefetchStatus,
@@ -59,15 +64,29 @@ import {
 const M_TO_YD = 1.0936133
 const YD_TO_M = 1 / M_TO_YD
 
-// Knobs for per-hole camera framing — tweak these to taste.
-// FRAME_PADDING: pixel inset around the framed hole. Bigger = more breathing
-//   room and slightly less zoom. Bottom is biased a bit so the tee dot
-//   doesn't sit on the very edge.
-// FRAME_ZOOM_ADJUST: log-2 offset applied to the auto-fit zoom. 0 = exact
-//   fit. Negative pulls back (e.g. -0.5 ≈ 30% wider view); positive pushes
-//   in. Try values roughly between -1.5 and +0.5.
-const FRAME_PADDING = { top: 16, right: 16, bottom: 16, left: 16 }
-const FRAME_ZOOM_ADJUST = -1
+// Knobs for per-hole camera framing.
+// The map fills the whole screen; the TopBar and bottom drawer overlay
+// it. These chrome heights (in px) are the *extra* viewport occlusion at
+// each edge BEYOND the safe-area insets — the insets are added at render
+// time. Bigger value = the framed hole is pushed further AWAY from that
+// edge.
+//   TOPBAR_CHROME ≈ TopBar inner height + small breathing gap.
+//   DRAWER_CHROME ≈ CTA row + nav row + body paddings.
+//   FRAME_RIGHT_CHROME ≈ width of the top-right F/G/P panel + margin —
+//     keeps the framed hole from sliding under the measurements.
+// FRAME_SIDE_PAD keeps the hole off the left/right edges.
+// FRAME_ZOOM_ADJUST: log-2 offset on the auto-fit zoom. 0 = exact fit to
+//   the visible region. Negative pulls back (-0.5 ≈ 40% wider view, -1 ≈
+//   2× wider); positive pushes in. Useful range roughly -1 to +0.5.
+// GREEN_ZOOM_ADJUST: same log-2 offset for the "zoom to green" frame.
+//   0 ≈ exact fit of the green polygon; negative pulls back to leave
+//   breathing room around the green ring.
+const TOPBAR_CHROME = 164
+const DRAWER_CHROME = 272
+const FRAME_SIDE_PAD = 24
+const FRAME_RIGHT_CHROME = 48
+const FRAME_ZOOM_ADJUST = -0.5
+const GREEN_ZOOM_ADJUST = -0.2
 
 // Knobs for Landing Zone planning waypoints (par 4 / par 5 only).
 // LZ_HIDE_WITHIN_M: when the player is closer than this to the pin, LZs
@@ -84,6 +103,7 @@ const LZ_INIT_FRACTIONS: Record<number, readonly number[]> = {
 }
 
 type LzToggle = 'auto' | 'force-shown' | 'force-hidden'
+type CameraMode = 'hole' | 'green'
 
 function lzFractionsFor(par: number): readonly number[] {
   return LZ_INIT_FRACTIONS[par] ?? []
@@ -128,7 +148,7 @@ export default function HoleScreen() {
   useEffect(() => {
     if (!round) return
     let cancelled = false
-    loadBundledCourse(round.courseId)
+    loadCourse(round.courseId)
       .then(c => {
         if (!cancelled) setCourse(c)
       })
@@ -239,11 +259,25 @@ function FramedHoleScreen({
   locationGranted,
 }: FramedHoleScreenProps) {
   const router = useRouter()
+  const insets = useSafeAreaInsets()
 
   const [mapSize, setMapSize] = useState<{
     width: number
     height: number
   } | null>(null)
+
+  // The Map's `key` changes per hole/layer, so it fully remounts. Camera
+  // commands (setStop/easeTo) issued before the native MapView finishes
+  // attaching resolve to a null reactTag and throw. Gate them on
+  // onDidFinishLoadingMap, and reset readiness in render whenever the
+  // key is about to change so the effect can't race the remount.
+  const mapInstanceKey = `${holeNum}-${mapLayer}`
+  const [trackedMapKey, setTrackedMapKey] = useState(mapInstanceKey)
+  const [isMapReady, setIsMapReady] = useState(false)
+  if (trackedMapKey !== mapInstanceKey) {
+    setTrackedMapKey(mapInstanceKey)
+    setIsMapReady(false)
+  }
 
   const persistedPin =
     holeState?.pinLat != null && holeState?.pinLng != null
@@ -271,11 +305,16 @@ function FramedHoleScreen({
     lat: currentHole.tee.coordinates[1],
   }
 
+  // Straight-line tee→green centroid distance as the hole's "yardage" for
+  // display only (real scorecard yardage isn't in the OSM data).
+  const holeYards = Math.round(distanceMeters(teeLL, greenC) * M_TO_YD)
+
   const [lzPositions, setLzPositions] = useState<LatLng[]>(() =>
     lzInitPositions(teeLL, greenC, lzFractionsFor(currentHole.par)),
   )
   const [lzToggle, setLzToggle] = useState<LzToggle>('auto')
-  // Reset LZ state when navigating to a new hole. Using the in-render
+  const [cameraMode, setCameraMode] = useState<CameraMode>('hole')
+  // Reset per-hole state when navigating to a new hole. Using the in-render
   // compare pattern (vs. useEffect) so the next render already has fresh
   // values — avoids a flash of stale waypoints from the previous hole.
   const [lzHoleNum, setLzHoleNum] = useState(holeNum)
@@ -285,6 +324,7 @@ function FramedHoleScreen({
       lzInitPositions(teeLL, greenC, lzFractionsFor(currentHole.par)),
     )
     setLzToggle('auto')
+    setCameraMode('hole')
   }
 
   const lzVisible =
@@ -350,28 +390,49 @@ function FramedHoleScreen({
     }
   }
 
-  const framePoints: LatLng[] = [
-    teeLL,
-    ...currentHole.green.coordinates[0].map(([lng, lat]) => ({ lat, lng })),
-  ]
+  const greenPoints: LatLng[] = currentHole.green.coordinates[0].map(
+    ([lng, lat]) => ({ lat, lng }),
+  )
+  const framePoints: LatLng[] = [teeLL, ...greenPoints]
   if (currentHole.fairway) {
     for (const [lng, lat] of currentHole.fairway.coordinates[0]) {
       framePoints.push({ lat, lng })
     }
   }
   const holeBbox = bboxOf(framePoints)
-  const baseFrame = mapSize
+  const framePadding = {
+    top: insets.top + TOPBAR_CHROME,
+    bottom: insets.bottom + DRAWER_CHROME,
+    left: FRAME_SIDE_PAD,
+    right: FRAME_SIDE_PAD + FRAME_RIGHT_CHROME,
+  }
+  const baseHoleFrame = mapSize
     ? frameForHole({
         tee: teeLL,
         greenCentroid: greenC,
         points: framePoints,
         viewport: mapSize,
-        padding: FRAME_PADDING,
+        padding: framePadding,
       })
     : null
-  const frame = baseFrame
-    ? { ...baseFrame, zoom: baseFrame.zoom + FRAME_ZOOM_ADJUST }
+  const holeFrame = baseHoleFrame
+    ? { ...baseHoleFrame, zoom: baseHoleFrame.zoom + FRAME_ZOOM_ADJUST }
     : null
+
+  const baseGreenFrame = mapSize
+    ? frameForHole({
+        tee: teeLL,
+        greenCentroid: greenC,
+        points: greenPoints,
+        viewport: mapSize,
+        padding: framePadding,
+      })
+    : null
+  const greenFrame = baseGreenFrame
+    ? { ...baseGreenFrame, zoom: baseGreenFrame.zoom + GREEN_ZOOM_ADJUST }
+    : null
+
+  const frame = cameraMode === 'green' ? greenFrame : holeFrame
 
   // Re-frame on hole change or first layout — initialViewState only fires
   // on Camera mount, and the Map key changes per hole/layer, so applying
@@ -395,18 +456,19 @@ function FramedHoleScreen({
   )
 
   useEffect(() => {
+    if (!isMapReady) return
     onFrameChange(frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame?.center.lat, frame?.center.lng, frame?.zoom, frame?.bearing])
+  }, [
+    isMapReady,
+    frame?.center.lat,
+    frame?.center.lng,
+    frame?.zoom,
+    frame?.bearing,
+  ])
 
-  const handleReframe = () => {
-    if (!frame) return
-    cameraRef.current?.easeTo({
-      center: [frame.center.lng, frame.center.lat],
-      zoom: frame.zoom,
-      bearing: frame.bearing,
-      duration: 400,
-    })
+  const handleToggleCameraMode = () => {
+    setCameraMode(prev => (prev === 'green' ? 'hole' : 'green'))
   }
 
   const handleMapLayout = (e: LayoutChangeEvent) => {
@@ -427,40 +489,34 @@ function FramedHoleScreen({
     if (!lngLat || lngLat.length < 2) return
     const tap: LatLng = { lat: lngLat[1], lng: lngLat[0] }
 
-    // When LZs are visible, the tap moves the nearest waypoint (pin or any
-    // LZ). Pin still has to land inside the green polygon; LZs get clamped
-    // to the hole's framing envelope so they can't escape the visible area.
+    // Zoom-to-green mode is the only mode in which the pin is editable —
+    // tap inside the green polygon to drop the pin there. Outside the
+    // green is a no-op so accidental misses don't leave the pin behind.
+    if (cameraMode === 'green') {
+      if (pointInPolygon(tap, currentHole.green)) {
+        setPin(round.id, holeNum, tap).catch(err =>
+          console.error('setPin failed', err),
+        )
+      }
+      return
+    }
+
+    // Hole-frame mode: tap moves the nearest visible Landing Zone.
+    // LZs get clamped to the hole's framing envelope so they can't escape
+    // the visible area. Par 3s (no LZs) intentionally swallow taps here —
+    // the user has to enter zoom-to-green to touch the pin.
     if (lzVisible && lzPositions.length > 0) {
-      const waypoints: LatLng[] = [...lzPositions, pin]
       let bestIdx = 0
       let bestD = Infinity
-      for (let i = 0; i < waypoints.length; i++) {
-        const d = distanceMeters(tap, waypoints[i])
+      for (let i = 0; i < lzPositions.length; i++) {
+        const d = distanceMeters(tap, lzPositions[i])
         if (d < bestD) {
           bestD = d
           bestIdx = i
         }
       }
-      const pinIdx = waypoints.length - 1
-      if (bestIdx === pinIdx) {
-        if (pointInPolygon(tap, currentHole.green)) {
-          setPin(round.id, holeNum, tap).catch(err =>
-            console.error('setPin failed', err),
-          )
-        }
-        return
-      }
       const clamped = clampToBBox(tap, holeBbox)
-      setLzPositions(prev =>
-        prev.map((p, i) => (i === bestIdx ? clamped : p)),
-      )
-      return
-    }
-
-    if (pointInPolygon(tap, currentHole.green)) {
-      setPin(round.id, holeNum, tap).catch(err =>
-        console.error('setPin failed', err),
-      )
+      setLzPositions(prev => prev.map((p, i) => (i === bestIdx ? clamped : p)))
     }
   }
 
@@ -498,6 +554,10 @@ function FramedHoleScreen({
     }
   }
 
+  // Position the floating reframe / LZ-toggle buttons just under the
+  // glass TopBar (insets.top + ~64 bar + small gap).
+  const floatingTop = insets.top + 72
+
   return (
     <View style={styles.container}>
       <Map
@@ -506,6 +566,8 @@ function FramedHoleScreen({
         mapStyle={mapLayer === 'vector' ? vectorStyle : satelliteStyle}
         onPress={handleMapPress}
         onLayout={handleMapLayout}
+        onDidFinishLoadingMap={() => setIsMapReady(true)}
+        compass={false}
       >
         <Camera
           ref={cameraRef}
@@ -525,7 +587,7 @@ function FramedHoleScreen({
           <Layer
             id="green-fill"
             type="fill"
-            paint={{ 'fill-color': '#03563D', 'fill-opacity': 0.55 }}
+            paint={{ 'fill-color': colors.fairwayGreen, 'fill-opacity': 0.45 }}
           />
         </GeoJSONSource>
 
@@ -539,7 +601,7 @@ function FramedHoleScreen({
           <Layer
             id="green-outline"
             type="line"
-            paint={{ 'line-color': '#00214C', 'line-width': 2 }}
+            paint={{ 'line-color': colors.primary, 'line-width': 1.5 }}
           />
         </GeoJSONSource>
 
@@ -559,10 +621,10 @@ function FramedHoleScreen({
               id={`lz-seg-${i}`}
               type="line"
               paint={{
-                'line-color': '#FFFFFF',
+                'line-color': colors.primary,
                 'line-width': 2,
                 'line-dasharray': [2, 2],
-                'line-opacity': 0.9,
+                'line-opacity': 0.85,
               }}
             />
           </GeoJSONSource>
@@ -577,7 +639,7 @@ function FramedHoleScreen({
           >
             <View style={styles.lzLabel} pointerEvents="none">
               <Text style={styles.lzLabelText}>
-                {Math.round(seg.distanceM * M_TO_YD)} yd
+                {Math.round(seg.distanceM * M_TO_YD)}
               </Text>
             </View>
           </Marker>
@@ -589,8 +651,8 @@ function FramedHoleScreen({
             type="circle"
             paint={{
               'circle-radius': 7,
-              'circle-color': '#FFFFFF',
-              'circle-stroke-color': '#00214C',
+              'circle-color': colors.primary,
+              'circle-stroke-color': colors.surfaceHighest,
               'circle-stroke-width': 2,
             }}
           />
@@ -604,9 +666,9 @@ function FramedHoleScreen({
             id="pin-dot"
             type="circle"
             paint={{
-              'circle-radius': 8,
-              'circle-color': '#CF9F37',
-              'circle-stroke-color': '#FFFFFF',
+              'circle-radius': 9,
+              'circle-color': colors.pinFill,
+              'circle-stroke-color': colors.primary,
               'circle-stroke-width': 2,
             }}
           />
@@ -623,9 +685,9 @@ function FramedHoleScreen({
                 id={`lz-dot-${i}`}
                 type="circle"
                 paint={{
-                  'circle-radius': 7,
-                  'circle-color': '#06B6D4',
-                  'circle-stroke-color': '#FFFFFF',
+                  'circle-radius': 8,
+                  'circle-color': colors.landingZoneFill,
+                  'circle-stroke-color': colors.primary,
                   'circle-stroke-width': 2,
                 }}
               />
@@ -633,25 +695,49 @@ function FramedHoleScreen({
           ))}
       </Map>
 
+      <TopBar
+        title={`HOLE ${currentHole.num}`}
+        subtitle={`PAR ${currentHole.par} • ${holeYards} YARDS`}
+        variant="glass"
+        right={
+          <IconAction
+            label="Home"
+            glyph="⌂"
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace('/' as never)
+            }
+          />
+        }
+        style={styles.topBarOverlay}
+      />
+
       <TouchableOpacity
-        style={styles.reframeButton}
-        onPress={handleReframe}
-        accessibilityLabel="Reframe hole"
+        style={[styles.floatBtn, { top: floatingTop, left: space.md }]}
+        onPress={handleToggleCameraMode}
+        accessibilityLabel={
+          cameraMode === 'green' ? 'Zoom back to hole' : 'Zoom to green'
+        }
       >
-        <Text style={styles.reframeButtonText}>⤢</Text>
+        <Text style={styles.floatBtnGlyph}>
+          {cameraMode === 'green' ? '⤢' : '⊙'}
+        </Text>
       </TouchableOpacity>
 
-      {currentHole.par >= 4 && (
+      <FgpPanel distances={distances} top={floatingTop} />
+
+      {currentHole.par >= 4 && cameraMode === 'hole' && (
         <TouchableOpacity
           style={[
-            styles.lzToggleButton,
-            lzToggle === 'force-shown' && styles.lzToggleButtonShown,
-            lzToggle === 'force-hidden' && styles.lzToggleButtonHidden,
+            styles.floatBtn,
+            styles.lzBtn,
+            { top: floatingTop, left: space.md + 56 },
+            lzToggle === 'force-shown' && styles.lzBtnShown,
+            lzToggle === 'force-hidden' && styles.lzBtnHidden,
           ]}
           onPress={handleToggleLz}
           accessibilityLabel={`Landing zones: ${lzToggle}`}
         >
-          <Text style={styles.lzToggleText}>
+          <Text style={styles.lzBtnText}>
             {lzToggle === 'force-shown'
               ? 'LZ ✓'
               : lzToggle === 'force-hidden'
@@ -661,45 +747,45 @@ function FramedHoleScreen({
         </TouchableOpacity>
       )}
 
-      <View style={styles.distancePanel}>
-        <Distance label="Front" value={distances?.front} />
-        <Distance label="Pin" value={distances?.pin} big />
-        <Distance label="Back" value={distances?.back} />
-      </View>
-
-      <View style={styles.navBar}>
-        <NavButton
-          label="◀ Prev"
-          disabled={!prevHole}
-          onPress={() =>
-            prevHole && router.replace(`/round/${prevHole.num}` as never)
+      <BottomDrawer
+        insetsBottom={insets.bottom}
+        currentHole={currentHole}
+        holes={course.holes}
+        prevHole={prevHole}
+        nextHole={nextHole}
+        canAdvance={canAdvance}
+        isLastHole={isLastHole}
+        onPrev={() =>
+          prevHole && router.replace(`/round/${prevHole.num}` as never)
+        }
+        onNext={handleNext}
+        onSelectHole={num => {
+          if (num !== holeNum) {
+            router.replace(`/round/${num}` as never)
           }
-        />
-        <View style={styles.holeBadge}>
-          <Text style={styles.holeBadgeLabel}>Hole</Text>
-          <Text style={styles.holeBadgeNum}>{currentHole.num}</Text>
-          <Text style={styles.holeBadgePar}>Par {currentHole.par}</Text>
-        </View>
-        <NavButton
-          label={isLastHole ? 'Scorecard ▶' : 'Next ▶'}
-          disabled={!canAdvance}
-          onPress={handleNext}
-        />
-      </View>
-
-      <TeeShotBar
-        inFlightHere={inFlightHere}
+        }}
+        shotMode={
+          inFlightHere
+            ? 'in-flight'
+            : completedShot
+              ? 'done'
+              : shotDismissed
+                ? 'dismissed'
+                : 'idle'
+        }
         completedShot={completedShot}
-        dismissed={shotDismissed}
-        busy={shotBusy}
-        onStart={handleStartShot}
-        onMark={handleMarkShot}
-        onCancel={handleCancelShot}
-        onDismiss={() => setDismissedHoleNum(holeNum)}
+        shotBusy={shotBusy}
+        onStartShot={handleStartShot}
+        onMarkShot={handleMarkShot}
+        onCancelShot={handleCancelShot}
+        onDismissShot={() => setDismissedHoleNum(holeNum)}
+        onUndismissShot={() => setDismissedHoleNum(null)}
       />
 
       {locationGranted === false && (
-        <View style={styles.permWarn}>
+        <View
+          style={[styles.permWarn, { top: insets.top + 80 + space.lg + 56 }]}
+        >
           <Text style={styles.permWarnText}>
             Location permission denied — distances unavailable
           </Text>
@@ -709,131 +795,382 @@ function FramedHoleScreen({
   )
 }
 
-function Distance({
-  label,
-  value,
-  big,
-}: {
-  label: string
-  value: number | undefined
-  big?: boolean
-}) {
-  const yds = value != null ? Math.round(value * M_TO_YD) : null
+interface DrawerProps {
+  insetsBottom: number
+  currentHole: Hole
+  holes: Hole[]
+  prevHole: Hole | undefined
+  nextHole: Hole | undefined
+  canAdvance: boolean
+  isLastHole: boolean
+  onPrev: () => void
+  onNext: () => void
+  onSelectHole: (holeNum: number) => void
+  shotMode: 'idle' | 'in-flight' | 'done' | 'dismissed'
+  completedShot:
+    | { distanceM: number; recordedAt: number; holeNum: number }
+    | undefined
+  shotBusy: boolean
+  onStartShot: () => void
+  onMarkShot: () => void
+  onCancelShot: () => void
+  onDismissShot: () => void
+  onUndismissShot: () => void
+}
+
+// Per-cell size in the hole-grid (square, aspectRatio: 1). Used both for the
+// flex layout and for computing the Animated height target on expand. The
+// effective natural cell size is (screenW - 2*marginMobile - 5*gap) / 6 —
+// we clamp the animation target to that, then add row gaps + paddings.
+const GRID_COLS = 6
+const GRID_GAP = 8
+const GRID_PAD_TOP = space.md
+const GRID_PAD_BOTTOM = space.sm
+
+function BottomDrawer({
+  insetsBottom,
+  currentHole,
+  holes,
+  prevHole,
+  nextHole,
+  canAdvance,
+  isLastHole,
+  onPrev,
+  onNext,
+  onSelectHole,
+  shotMode,
+  completedShot,
+  shotBusy,
+  onStartShot,
+  onMarkShot,
+  onCancelShot,
+  onDismissShot,
+  onUndismissShot,
+}: DrawerProps) {
+  const { width: screenW } = useWindowDimensions()
+  const [expanded, setExpanded] = useState(false)
+  // Lazy useState (not useRef) so the value can be referenced from JSX
+  // without tripping the react-hooks/refs lint rule. Animated.Value is
+  // mutable but stable across renders, so single initialization is fine.
+  const [heightAnim] = useState(() => new Animated.Value(0))
+
+  const gridHeight = useMemo(() => {
+    const usable = screenW - 2 * space.marginMobile - (GRID_COLS - 1) * GRID_GAP
+    const cellSize = Math.max(0, usable / GRID_COLS)
+    const numRows = Math.ceil(holes.length / GRID_COLS)
+    if (numRows === 0) return 0
+    return (
+      numRows * cellSize +
+      (numRows - 1) * GRID_GAP +
+      GRID_PAD_TOP +
+      GRID_PAD_BOTTOM
+    )
+  }, [holes.length, screenW])
+
+  // Snap closed whenever the active hole changes (e.g., Prev/Next pressed
+  // while the grid is open). In-render compare avoids a useEffect that
+  // would briefly show stale state on remount.
+  const [trackedHoleNum, setTrackedHoleNum] = useState(currentHole.num)
+  if (trackedHoleNum !== currentHole.num) {
+    setTrackedHoleNum(currentHole.num)
+    if (expanded) setExpanded(false)
+  }
+
+  useEffect(() => {
+    Animated.timing(heightAnim, {
+      toValue: expanded ? gridHeight : 0,
+      duration: 220,
+      useNativeDriver: false,
+    }).start()
+  }, [expanded, gridHeight, heightAnim])
+
+  const handleSelect = (num: number) => {
+    setExpanded(false)
+    onSelectHole(num)
+  }
+
   return (
-    <View style={styles.distanceCell}>
-      <Text style={styles.distanceLabel}>{label}</Text>
-      <Text style={[styles.distanceValue, big && styles.distanceValueBig]}>
-        {yds == null ? '—' : `${yds}`}
-      </Text>
-      <Text style={styles.distanceUnit}>yds</Text>
+    <View style={[drawer.wrap, { paddingBottom: insetsBottom }]}>
+      <Animated.View style={[drawer.gridWrap, { height: heightAnim }]}>
+        <HoleGrid
+          holes={holes}
+          currentHoleNum={currentHole.num}
+          onSelect={handleSelect}
+        />
+      </Animated.View>
+
+      <View style={drawer.body}>
+        <View style={drawer.shotRow}>
+          <ShotPrimary
+            mode={shotMode}
+            completedShot={completedShot}
+            busy={shotBusy}
+            onStart={onStartShot}
+            onMark={onMarkShot}
+            onUndismiss={onUndismissShot}
+          />
+          <ShotSecondary
+            mode={shotMode}
+            onCancel={onCancelShot}
+            onDismiss={onDismissShot}
+            onStart={onStartShot}
+            busy={shotBusy}
+          />
+        </View>
+      </View>
+
+      <View style={drawer.nav}>
+        <NavButton
+          label="PREV"
+          glyph="‹"
+          disabled={!prevHole}
+          onPress={onPrev}
+        />
+        <TouchableOpacity
+          style={drawer.navCenter}
+          onPress={() => setExpanded(prev => !prev)}
+          activeOpacity={0.7}
+          accessibilityLabel={
+            expanded ? 'Close hole selector' : 'Open hole selector'
+          }
+        >
+          <Text style={drawer.navCenterLabel}>HOLE</Text>
+          <View style={drawer.navCenterRow}>
+            <Text style={drawer.navCenterNum}>{currentHole.num}</Text>
+          </View>
+        </TouchableOpacity>
+        <NavButton
+          label={isLastHole ? 'CARD' : 'NEXT'}
+          glyph="›"
+          glyphRight
+          disabled={!canAdvance}
+          onPress={onNext}
+        />
+      </View>
     </View>
   )
 }
 
-function TeeShotBar({
-  inFlightHere,
+function HoleGrid({
+  holes,
+  currentHoleNum,
+  onSelect,
+}: {
+  holes: Hole[]
+  currentHoleNum: number
+  onSelect: (num: number) => void
+}) {
+  const rows: Hole[][] = []
+  for (let i = 0; i < holes.length; i += GRID_COLS) {
+    rows.push(holes.slice(i, i + GRID_COLS))
+  }
+  return (
+    <View style={drawer.gridInner}>
+      {rows.map((row, ri) => (
+        <View key={ri} style={drawer.gridRow}>
+          {row.map(h => {
+            const active = h.num === currentHoleNum
+            return (
+              <TouchableOpacity
+                key={h.num}
+                style={[drawer.gridCell, active && drawer.gridCellActive]}
+                onPress={() => onSelect(h.num)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    drawer.gridCellNum,
+                    active && drawer.gridCellNumActive,
+                  ]}
+                >
+                  {h.num}
+                </Text>
+                <Text style={drawer.gridCellPar}>PAR {h.par}</Text>
+              </TouchableOpacity>
+            )
+          })}
+          {row.length < GRID_COLS &&
+            Array.from({ length: GRID_COLS - row.length }).map((_, i) => (
+              <View key={`spacer-${i}`} style={drawer.gridCellSpacer} />
+            ))}
+        </View>
+      ))}
+    </View>
+  )
+}
+
+function ShotPrimary({
+  mode,
   completedShot,
-  dismissed,
   busy,
   onStart,
   onMark,
-  onCancel,
-  onDismiss,
+  onUndismiss,
 }: {
-  inFlightHere: boolean
-  completedShot:
-    | { distanceM: number; recordedAt: number; holeNum: number }
-    | undefined
-  dismissed: boolean
+  mode: DrawerProps['shotMode']
+  completedShot: DrawerProps['completedShot']
   busy: boolean
   onStart: () => void
   onMark: () => void
-  onCancel: () => void
-  onDismiss: () => void
+  onUndismiss: () => void
 }) {
-  // While recording we never honor dismiss — the user needs the Mark button.
-  if (dismissed && !inFlightHere && !completedShot) return null
-
-  if (inFlightHere) {
+  if (mode === 'in-flight') {
     return (
-      <View style={styles.shotBar}>
-        <TouchableOpacity
-          style={[styles.shotMainButton, styles.shotMarkButton]}
-          onPress={onMark}
-          disabled={busy}
-        >
-          <Text style={styles.shotMainText}>⛳ Mark Tee Shot</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.shotSecondary}
-          onPress={onCancel}
-          accessibilityLabel="Cancel tee shot"
-        >
-          <Text style={styles.shotSecondaryText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={[ctaStyles.cta, ctaStyles.markCta]}
+        onPress={onMark}
+        disabled={busy}
+        activeOpacity={0.85}
+      >
+        <Text style={ctaStyles.glyph}>⛳</Text>
+        <Text style={ctaStyles.label}>MARK TEE SHOT</Text>
+      </TouchableOpacity>
     )
   }
-
-  if (completedShot) {
+  if (mode === 'done' && completedShot) {
     const yds = Math.round(completedShot.distanceM * M_TO_YD)
     return (
-      <View style={styles.shotBar}>
-        <View style={styles.shotInfo}>
-          <Text style={styles.shotInfoLabel}>Tee Shot</Text>
-          <Text style={styles.shotInfoValue}>{yds} yds</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.shotSecondary}
-          onPress={onStart}
-          disabled={busy}
-        >
-          <Text style={styles.shotSecondaryText}>Redo</Text>
-        </TouchableOpacity>
+      <View style={[ctaStyles.cta, ctaStyles.doneCta]}>
+        <Text style={ctaStyles.glyph}>⛳</Text>
+        <Text style={ctaStyles.label}>TEE SHOT {yds} YDS</Text>
       </View>
     )
   }
-
-  return (
-    <View style={styles.shotBar}>
+  if (mode === 'dismissed') {
+    return (
       <TouchableOpacity
-        style={[styles.shotMainButton, styles.shotStartButton]}
+        style={[ctaStyles.cta, ctaStyles.startCta]}
+        onPress={onUndismiss}
+        activeOpacity={0.85}
+      >
+        <Text style={ctaStyles.glyph}>⛳</Text>
+        <Text style={ctaStyles.label}>RECORD TEE SHOT</Text>
+      </TouchableOpacity>
+    )
+  }
+  // idle
+  return (
+    <TouchableOpacity
+      style={[ctaStyles.cta, ctaStyles.startCta]}
+      onPress={onStart}
+      disabled={busy}
+      activeOpacity={0.85}
+    >
+      <Text style={ctaStyles.glyph}>⛳</Text>
+      <Text style={ctaStyles.label}>START TEE SHOT</Text>
+    </TouchableOpacity>
+  )
+}
+
+function ShotSecondary({
+  mode,
+  onCancel,
+  onDismiss,
+  onStart,
+  busy,
+}: {
+  mode: DrawerProps['shotMode']
+  onCancel: () => void
+  onDismiss: () => void
+  onStart: () => void
+  busy: boolean
+}) {
+  if (mode === 'in-flight') {
+    return (
+      <TouchableOpacity
+        style={ctaStyles.iconBtn}
+        onPress={onCancel}
+        accessibilityLabel="Cancel tee shot"
+      >
+        <Text style={ctaStyles.iconBtnGlyph}>✕</Text>
+      </TouchableOpacity>
+    )
+  }
+  if (mode === 'done') {
+    return (
+      <TouchableOpacity
+        style={ctaStyles.iconBtn}
         onPress={onStart}
         disabled={busy}
+        accessibilityLabel="Re-record tee shot"
       >
-        <Text style={styles.shotMainText}>⛳ Start Tee Shot</Text>
+        <Text style={ctaStyles.iconBtnGlyph}>↻</Text>
       </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.shotSecondary}
-        onPress={onDismiss}
-        accessibilityLabel="Dismiss tee shot"
-      >
-        <Text style={styles.shotSecondaryText}>✕</Text>
-      </TouchableOpacity>
+    )
+  }
+  // idle / dismissed
+  return (
+    <TouchableOpacity
+      style={ctaStyles.iconBtn}
+      onPress={onDismiss}
+      accessibilityLabel="Dismiss tee shot prompt"
+    >
+      <Text style={ctaStyles.iconBtnGlyph}>✕</Text>
+    </TouchableOpacity>
+  )
+}
+
+function FgpPanel({
+  distances,
+  top,
+}: {
+  distances: { front: number; pin: number; back: number } | null
+  top: number
+}) {
+  return (
+    <View style={[fgp.panel, { top }]} pointerEvents="none">
+      <FgpCell label="BACK" value={distances?.back} />
+      <View style={fgp.divider} />
+      <FgpCell label="PIN" value={distances?.pin} primary />
+      <View style={fgp.divider} />
+      <FgpCell label="FRONT" value={distances?.front} />
+    </View>
+  )
+}
+
+function FgpCell({
+  label,
+  value,
+  primary,
+}: {
+  label: string
+  value: number | undefined
+  primary?: boolean
+}) {
+  const yds = value != null ? Math.round(value * M_TO_YD) : null
+  return (
+    <View style={fgp.cell}>
+      <Text style={[fgp.label, primary && fgp.labelPrimary]}>{label}</Text>
+      <Text style={[fgp.value, primary && fgp.valuePrimary]}>
+        {yds == null ? '—' : `${yds}`}
+      </Text>
     </View>
   )
 }
 
 function NavButton({
   label,
+  glyph,
+  glyphRight,
   disabled,
   onPress,
 }: {
   label: string
-  disabled: boolean
+  glyph: string
+  glyphRight?: boolean
+  disabled?: boolean
   onPress: () => void
 }) {
   return (
     <TouchableOpacity
-      style={[styles.navButton, disabled && styles.navButtonDisabled]}
-      disabled={disabled}
+      style={[navBtn.wrap, disabled && navBtn.disabled]}
       onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.7}
     >
-      <Text
-        style={[styles.navButtonText, disabled && styles.navButtonTextDisabled]}
-      >
-        {label}
-      </Text>
+      {!glyphRight && <Text style={navBtn.glyph}>{glyph}</Text>}
+      <Text style={navBtn.label}>{label}</Text>
+      {glyphRight && <Text style={navBtn.glyph}>{glyph}</Text>}
     </TouchableOpacity>
   )
 }
@@ -841,207 +1178,93 @@ function NavButton({
 function CenterMessage({ text, busy }: { text: string; busy?: boolean }) {
   return (
     <View style={styles.centerMsg}>
-      {busy ? <ActivityIndicator color="#1a472a" /> : null}
+      {busy ? <ActivityIndicator color={colors.primary} /> : null}
       <Text style={styles.centerMsgText}>{text}</Text>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: colors.surfaceLowest },
   map: { flex: 1 },
 
-  distancePanel: {
-    flexDirection: 'row',
-    backgroundColor: '#00214C',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+  topBarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
   },
-  distanceCell: { flex: 1, alignItems: 'center' },
-  distanceLabel: {
-    color: '#B3E0D5',
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  distanceValue: {
-    color: '#FFFFFF',
-    fontSize: 36,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  distanceValueBig: { fontSize: 56 },
-  distanceUnit: { color: '#B3E0D5', fontSize: 11, marginTop: -2 },
 
-  navBar: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    backgroundColor: '#03563D',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  navButton: {
-    flex: 1,
-    backgroundColor: '#00214C',
-    borderRadius: 10,
+  floatBtn: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    backgroundColor: colors.glassSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.outlineVariant,
+    ...shadows.card,
   },
-  navButtonDisabled: { backgroundColor: '#1F2937', opacity: 0.5 },
-  navButtonText: { color: '#FFFFFF', fontSize: 18, fontWeight: '600' },
-  navButtonTextDisabled: { color: '#B3E0D5' },
+  floatBtnGlyph: {
+    color: colors.primary,
+    fontSize: 20,
+    fontFamily: 'Sora_700Bold',
+  },
 
-  holeBadge: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    backgroundColor: '#03563D',
+  lzBtn: {
+    width: 52,
+    height: 44,
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
   },
-  holeBadgeLabel: { color: '#B3E0D5', fontSize: 10, letterSpacing: 1 },
-  holeBadgeNum: {
-    color: '#FFFFFF',
-    fontSize: 28,
-    fontWeight: '700',
-    lineHeight: 30,
+  lzBtnShown: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.primary,
   },
-  holeBadgePar: { color: '#B3E0D5', fontSize: 11 },
-
-  shotBar: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    backgroundColor: '#00214C',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+  lzBtnHidden: {
+    backgroundColor: colors.surfaceLow,
+    borderColor: colors.outlineVariant,
+    opacity: 0.65,
   },
-  shotMainButton: {
-    flex: 1,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-  },
-  shotStartButton: { backgroundColor: '#03563D' },
-  shotMarkButton: { backgroundColor: '#CF9F37' },
-  shotMainText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  shotInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 14,
-  },
-  shotInfoLabel: {
-    color: '#B3E0D5',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-  },
-  shotInfoValue: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  shotSecondary: {
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  shotSecondaryText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
+  lzBtnText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontFamily: 'Sora_700Bold',
+    letterSpacing: 0.5,
   },
 
   permWarn: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 8,
-    backgroundColor: 'rgba(220,38,38,0.92)',
-    padding: 8,
-    borderRadius: 6,
+    left: space.md,
+    right: space.md,
+    backgroundColor: colors.errorContainer,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.error,
   },
-  permWarnText: { color: '#FFFFFF', textAlign: 'center', fontSize: 13 },
-
-  reframeButton: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,33,76,0.85)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  reframeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '700',
-    lineHeight: 24,
-  },
-
-  lzToggleButton: {
-    position: 'absolute',
-    top: 12,
-    left: 60,
-    height: 40,
-    paddingHorizontal: 12,
-    minWidth: 56,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,33,76,0.85)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  lzToggleButtonShown: {
-    backgroundColor: 'rgba(6,182,212,0.92)',
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  lzToggleButtonHidden: {
-    backgroundColor: 'rgba(75,85,99,0.85)',
-    borderColor: 'rgba(255,255,255,0.15)',
-  },
-  lzToggleText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+  permWarnText: {
+    ...type.bodyMd,
+    color: colors.primary,
+    textAlign: 'center',
   },
 
   lzLabel: {
-    backgroundColor: 'rgba(0,33,76,0.85)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: colors.glass,
+    borderRadius: radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.outlineVariant,
   },
   lzLabelText: {
-    color: '#FFFFFF',
+    color: colors.primary,
+    fontFamily: fonts.data,
     fontSize: 12,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.5,
   },
 
   centerMsg: {
@@ -1050,7 +1273,218 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
     gap: 12,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.surface,
   },
-  centerMsgText: { color: '#00214C', textAlign: 'center', fontSize: 16 },
+  centerMsgText: { ...type.bodyMd, textAlign: 'center' },
+})
+
+const drawer = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.surfaceHighest,
+    borderTopLeftRadius: radius['3xl'],
+    borderTopRightRadius: radius['3xl'],
+    ...shadows.drawer,
+  },
+  body: {
+    paddingHorizontal: space.marginMobile,
+    paddingTop: space.lg,
+    paddingBottom: space.md,
+    gap: space.md,
+  },
+  shotRow: {
+    flexDirection: 'row',
+    gap: space.sm,
+    alignItems: 'stretch',
+  },
+  nav: {
+    height: 88,
+    paddingHorizontal: space.marginMobile,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.outlineVariant,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'space-between',
+  },
+  navCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: space.sm,
+  },
+  navCenterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  navCenterNum: {
+    color: colors.primary,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 24,
+    lineHeight: 24,
+  },
+  navCenterLabel: { ...type.labelXs },
+
+  gridWrap: {
+    overflow: 'hidden',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.outlineVariant,
+  },
+  gridInner: {
+    paddingHorizontal: space.marginMobile,
+    paddingTop: GRID_PAD_TOP,
+    paddingBottom: GRID_PAD_BOTTOM,
+    gap: GRID_GAP,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    gap: GRID_GAP,
+  },
+  gridCell: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceHigh,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.outlineVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  gridCellActive: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.primary,
+  },
+  gridCellSpacer: { flex: 1 },
+  gridCellNum: {
+    color: colors.primary,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 18,
+    lineHeight: 20,
+  },
+  gridCellNumActive: {
+    color: colors.onSecondary,
+  },
+  gridCellPar: {
+    color: colors.onSurfaceVariant,
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 9,
+    letterSpacing: 1.2,
+  },
+})
+
+const fgp = StyleSheet.create({
+  panel: {
+    position: 'absolute',
+    right: space.sm,
+    backgroundColor: colors.glass,
+    borderRadius: radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.outlineVariant,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    ...shadows.card,
+  },
+  cell: {
+    alignItems: 'flex-end',
+    gap: 2,
+    paddingVertical: 2,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.outlineVariant,
+    marginVertical: 4,
+  },
+  label: {
+    ...type.labelXs,
+  },
+  labelPrimary: {
+    color: colors.primary,
+    fontSize: 11,
+    letterSpacing: 1.6,
+  },
+  value: {
+    color: colors.onSurface,
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 22,
+    lineHeight: 26,
+    fontVariant: ['tabular-nums'],
+  },
+  valuePrimary: {
+    color: colors.primary,
+    fontSize: 34,
+    lineHeight: 38,
+    letterSpacing: -0.5,
+  },
+})
+
+const ctaStyles = StyleSheet.create({
+  cta: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 56,
+    borderRadius: radius.xl,
+    gap: 10,
+    paddingHorizontal: space.md,
+    ...shadows.cta,
+  },
+  startCta: { backgroundColor: colors.secondary },
+  markCta: { backgroundColor: '#a83232' },
+  doneCta: {
+    backgroundColor: colors.surfaceHigh,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.outlineVariant,
+  },
+  glyph: { color: colors.primary, fontSize: 20 },
+  label: {
+    color: colors.primary,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  iconBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surfaceHigh,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.outlineVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBtnGlyph: {
+    color: colors.onSurface,
+    fontSize: 20,
+    fontFamily: 'Sora_700Bold',
+  },
+})
+
+const navBtn = StyleSheet.create({
+  wrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: space.sm,
+    paddingVertical: 16,
+    minWidth: 80,
+  },
+  disabled: { opacity: 0.35 },
+  glyph: {
+    color: colors.onSurfaceVariant,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 24,
+    lineHeight: 24,
+    marginTop: -3,
+  },
+  label: {
+    color: colors.onSurfaceVariant,
+    fontFamily: 'Sora_700Bold',
+    fontSize: 11,
+    letterSpacing: 1.6,
+  },
 })
