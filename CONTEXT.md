@@ -74,7 +74,7 @@ Where a Course's data came from. One of: `bundled` (JSON in `courses/`, shipped 
 The workflow for handling missing Tier 0/1 data after an Overpass fetch. If a Hole is missing its Green polygon, the user is walked through tapping the green on satellite imagery to define it. The Course becomes valid once all Holes have Greens and Tees. Occurs once per course, post-add, pre-play.
 
 **Find Nearby**
-The Phase 5 course-discovery flow. Single button. Queries Overpass for `leisure=golf_course` polygons within 50km of the user's GPS, lists matches by name + distance. Tapping a match installs that Course. See [ADR-007](docs/adr/0007-find-nearby-only.md).
+The Phase 6 course-discovery flow. Single button. Queries Overpass for `leisure=golf_course` ways/relations within radius of the player's GPS, lists matches by name + distance. Tapping a match fetches and normalizes it, runs Tap-to-Fix if any green is missing, then installs the Course to SQLite. See [ADR-007](docs/adr/0007-find-nearby-only.md).
 
 **Pre-fetch**
 The act of downloading both raster (satellite) and vector tile data for a Course's bounding box at zoom levels 16–18. Triggered automatically on Course install. Makes the Course playable offline. See [ADR-008](docs/adr/0008-prefetch-both-tile-layers.md).
@@ -83,7 +83,7 @@ The act of downloading both raster (satellite) and vector tile data for a Course
 
 These terms drift in from commercial-golf-app speak or generic software speak. Don't use them in code or docs — they substitute for, or muddy, terms above.
 
-- "Yardage" → say **distance** (and use units from settings, not assumed yards).
+- "Yardage" → say **distance**. Geo math is always in metres; the display converts to yards at the boundary today, and a units setting is planned for Phase 7 — so don't bake "yards" into names or stored values.
 - "Layup" → use **Landing Zone** instead.
 - "Hole-out," "make," "finish hole" → just **mark next hole** or **next hole**.
 - "Tracker," "GPS tracker" → Eagle Eye is a **rangefinder + scorecard**, not a tracker. We don't continuously track position to disk.

@@ -1,0 +1,68 @@
+name: EAS Build — Preview
+
+# Fast feedback: a push to main (or an on-demand run) produces an installable
+# preview APK in the cloud (EAS), downloads it, and attaches it to this workflow
+# run as an artifact — so you can sideload without building on your dev machine.
+#
+# Switch to manual-only by deleting the `push:` block below if you start hitting
+# the EAS free-tier monthly build cap.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+concurrency:
+  # One preview build per branch; a newer push cancels the older queued run.
+  group: eas-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build preview APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci # reads .npmrc (legacy-peer-deps=true)
+
+      - name: Build Android preview (APK)
+        id: build
+        run: |
+          eas build --platform android --profile preview --non-interactive --wait --json > build.json
+          URL="$(jq -r '.[0].artifacts.buildUrl // .[0].artifacts.applicationArchiveUrl // empty' build.json)"
+          if [ -z "$URL" ]; then echo "No artifact URL from EAS"; cat build.json; exit 1; fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Preview APK ready :rocket:"
+            echo ""
+            echo "[Download .apk]($URL) — or grab it from this run's Artifacts."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download APK
+        run: curl -fL -o eagle-eye-preview.apk "${{ steps.build.outputs.url }}"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: eagle-eye-preview-apk
+          path: eagle-eye-preview.apk
+          retention-days: 30
+          if-no-files-found: error

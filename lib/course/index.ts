@@ -3,11 +3,10 @@ import { create } from 'zustand'
 
 import { db } from '@/db'
 import presidioCourse from '@/courses/presidio.json'
-import coricaParkCourse from '@/courses/corica-park.json'
 import crystalSpringsCourse from '@/courses/crystal-springs.json'
-import gleneaglesCourse from '@/courses/gleneagles.json'
 import hardingParkCourse from '@/courses/harding-park.json'
 import lincolnParkCourse from '@/courses/lincoln-park.json'
+import peacockGapCourse from '@/courses/peacock-gap.json'
 
 import { normalize, type OsmResult } from './normalize'
 import { courses as coursesTable } from './schema'
@@ -43,10 +42,9 @@ const USER_AGENT = 'eagle-eye/0.1 (https://github.com/timharding/eagle-eye)'
 const BUNDLED_REGISTRY: Record<string, Course> = {
   presidio: presidioCourse as Course,
   'harding-park': hardingParkCourse as Course,
-  'corica-park': coricaParkCourse as Course,
   'crystal-springs': crystalSpringsCourse as Course,
   'lincoln-park': lincolnParkCourse as Course,
-  gleneagles: gleneaglesCourse as Course,
+  'peacock-gap': peacockGapCourse as Course,
 }
 
 export async function loadBundledCourse(slug: string): Promise<Course> {

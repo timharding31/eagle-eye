@@ -1,23 +1,23 @@
 import { Platform, TextStyle } from 'react-native'
 
-// Eagle Eye design system — dark teal-green tonal palette with cream
-// foreground text and maroon CTA. Inspired by the top-nav / drawer mockup;
-// designed to read well over satellite imagery in bright outdoor light.
+// Eagle Eye design system — deep navy tonal palette with cream foreground
+// text and maroon CTA. Designed to read well over satellite imagery in
+// bright outdoor light.
 
 export const colors = {
   // Tonal surface palette (darkest → brightest)
-  surfaceLowest: '#002b25',
-  surfaceLow: '#003d33',
-  surface: '#004d40',
-  surfaceHigh: '#005b4f',
-  surfaceBright: '#00695c',
+  surfaceLowest: '#0a1226',
+  surfaceLow: '#101a36',
+  surface: '#172246',
+  surfaceHigh: '#1d2b56',
+  surfaceBright: '#243466',
   // Used for drawer-style elevations (slightly darker than base surface)
-  surfaceHighest: '#00332c',
+  surfaceHighest: '#0c1530',
 
   // Foreground on dark surfaces
   primary: '#fdf5e6',
   onSurface: '#fdf5e6',
-  onSurfaceVariant: '#b2dfdb',
+  onSurfaceVariant: '#b4c5e0',
   onSurfaceMuted: 'rgba(253, 245, 230, 0.62)',
 
   // Maroon CTA
@@ -26,8 +26,10 @@ export const colors = {
   onSecondary: '#fdf5e6',
 
   // Borders / dividers
-  outline: '#b2dfdb',
-  outlineVariant: 'rgba(178, 223, 219, 0.25)',
+  outline: '#b4c5e0',
+  outlineVariant: 'rgba(180, 197, 224, 0.25)',
+
+  goldenEagle: '#CF9F37',
 
   // Status
   error: '#ffb4ab',
@@ -43,8 +45,8 @@ export const colors = {
 
   // Translucent glass effects (no backdrop blur on RN — we approximate
   // with an opaque dark surface at high alpha + a 1px hairline border)
-  glass: 'rgba(0, 51, 44, 0.92)',
-  glassSoft: 'rgba(0, 77, 64, 0.85)',
+  glass: 'rgba(12, 21, 48, 0.92)',
+  glassSoft: 'rgba(23, 34, 70, 0.85)',
 } as const
 
 export const space = {
@@ -133,8 +135,8 @@ export const type = {
   } satisfies TextStyle,
   labelXs: {
     fontFamily: fonts.label,
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 9,
+    lineHeight: 10,
     letterSpacing: 1.4,
     textTransform: 'uppercase' as const,
     color: colors.onSurfaceVariant,

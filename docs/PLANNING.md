@@ -47,6 +47,8 @@ A single "MVP done" line at the end of Phase 4 below. The MVP delivers:
 | State                 | Zustand                            | Tiny, no provider boilerplate. One store per concept (`useRoundStore`, `useSettingsStore`).                         |
 | Routing               | Expo Router (file-based)           | Conventions match wider ecosystem. Type-safe routes.                                                                |
 | Geo math              | Turf.js (`@turf/turf`)             | Tree-shakeable. Wrapped by `lib/geo` — Turf never appears in `lib/geo`'s interface.                                 |
+| Styling               | In-house design system (`lib/theme.ts`) + RN `StyleSheet` | Small token set (colors/type/space/radius/shadows); no UI-kit dependency (Gluestack was removed).                    |
+| Typography / icons    | Sora (`@expo-google-fonts/sora`) + `react-native-svg` / `lucide-react-native` | Single typeface across the app; SVG glyphs hand-rolled in `components/icons.tsx` plus a few lucide re-exports.       |
 | Build / distribution  | EAS Build → preview APK            | Free tier covers hobby use. Sideload via Drive/Signal.                                                              |
 
 See [ADR-005](adr/0005-maplibre-offline-packs.md) for the renderer choice rationale.
@@ -59,8 +61,8 @@ Modules are grouped by domain concept, not by layer. Each one earns its place by
 
 | Module       | What it owns                                                                                                                                           | External interface (rough)                                                                                                                                                                    | Internal seams                                         |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `lib/geo`    | Pure geospatial computation.                                                                                                                           | `distanceMeters(a, b)`, `nearestPointOnPolygon(here, poly)`, `farthestPointOnPolygon(here, poly)`, `centroid(poly)`, `pointInPolygon(pt, poly)`, `lzInitPositions(tee, greenCentroid, count)` | Turf.js                                                |
-| `lib/course` | Course data loading and normalization. Shape is source-agnostic — bundled JSON, Overpass fetch, and future ML inference all produce the same `Course`. | `loadBundledCourse(slug)`, `loadInstalledCourse(id)`, `findNearby(here, radiusKm)` (Phase 5), `addCourseFromOverpass(osmId)` (Phase 5), `normalize(osmElements)` (shared with build script)   | OSM tag parsing, Drizzle queries, Overpass HTTP client |
+| `lib/geo`    | Pure geospatial computation.                                                                                                                           | `distanceMeters(a, b)`, `nearestPointOnPolygon(here, poly)`, `farthestPointOnPolygon(here, poly)`, `centroid(poly)`, `pointInPolygon(pt, poly)`, `bearingDeg(a, b)`, `frameForHole(...)`, `lzInitPositions(tee, greenCentroid, count)`, `bboxOf(hole)` | Turf.js                                                |
+| `lib/course` | Course data loading, normalization, and the Overpass adapter. Shape is source-agnostic — bundled JSON, Overpass fetch, and future ML inference all produce the same `Course`. | `loadCourse(slug)`, `loadBundledCourse(slug)`, `loadInstalledCourse(id)`, `listBundledCourses()`, `listInstalledCourses()`, `listAllCourses()`, `findNearby(here, radiusKm)`, `fetchCourseFromOverpass(osmType, osmId)`, `applyMissingFixes(...)` (tap-to-fix), `installCourse(course)`, `removeInstalledCourse(id)`, `normalize(...)` (shared with build script), pending-install store (`set/get/clear/usePendingInstall`) | OSM tag parsing, Drizzle queries, Overpass HTTP client, Zustand (pending-install) |
 | `lib/round`  | Round lifecycle. Owns the single-active-round invariant. State machine: `idle → active → ended`.                                                       | `startRound(courseId)`, `endRound(round, scores)`, `useActiveRound()`, `setPin(holeNum, latLng)`, `getHoleState(round, holeNum)`, `history()`                                                 | Drizzle, Zustand store, stale-round detection          |
 | `lib/tiles`  | Offline tile management. Wraps MapLibre's offline-pack API for both raster (satellite) and vector layers.                                              | `prefetchForCourse(courseId)`, `prefetchStatus(courseId)`, `retryPrefetch(courseId)`, `vectorStyle`, `satelliteStyle`                                                                         | MapLibre's offline manager, URL templates              |
 | `lib/shots`  | Tee shot recording. Small but earning its place — owns the in-flight "recording" state and the GPS snapshot logic.                                     | `startTeeShot(holeNum)`, `markTeeShot()`, `cancelTeeShot()`, `useCurrentTeeShot()`                                                                                                            | GPS sampling, Drizzle, in-flight Zustand state         |
@@ -68,7 +70,7 @@ Modules are grouped by domain concept, not by layer. Each one earns its place by
 #### Seam status
 
 - **`lib/geo`**: no seam. Pure in-process computation. Interface is the test surface (if tests ever exist).
-- **`lib/course`**: hypothetical seam until Phase 5. From Phase 5 it has two adapters (bundled-JSON + Overpass) and the seam becomes real. The shared `normalize()` function exists from Phase 1 — the Node build script and the in-app Overpass path both call it.
+- **`lib/course`**: the seam is now real (as of Phase 6). It has two production adapters — bundled-JSON and Overpass — both feeding the shared `normalize()` (which the Node build script also calls). The Overpass path adds Find Nearby discovery, fetch, tap-to-fix green synthesis, and SQLite install/remove.
 - **`lib/round`**, **`lib/tiles`**, **`lib/shots`**: single-adapter modules. SQLite, MapLibre, GPS each have only one production implementation each. No port-and-adapter indirection until a second implementation is justified.
 
 ### Repo layout
@@ -76,37 +78,47 @@ Modules are grouped by domain concept, not by layer. Each one earns its place by
 ```
 eagle-eye/
 ├── app/                      # Expo Router screens. Thin — delegate to lib/.
-│   ├── _layout.tsx
-│   ├── index.tsx             # Home (course picker or active round)
+│   ├── _layout.tsx           # Migrations + hydration + fonts + providers
+│   ├── index.tsx             # Home (course picker or active-round resume)
+│   ├── history.tsx           # Round history list
+│   ├── spike.tsx             # Map risk-spike screen (kept for debugging)
 │   ├── round/
-│   │   └── [hole].tsx        # The hole screen
-│   ├── round/scorecard.tsx   # Post-round entry
-│   ├── courses/add.tsx       # Find Nearby (Phase 5)
-│   └── settings.tsx
+│   │   ├── [hole].tsx        # The hole screen
+│   │   └── scorecard.tsx     # Post-round score entry
+│   └── courses/
+│       ├── add.tsx           # Find Nearby (Phase 6)
+│       └── fix.tsx           # Tap-to-fix missing greens (Phase 6)
 ├── lib/
 │   ├── geo/
 │   ├── course/
-│   │   ├── index.ts          # External interface
+│   │   ├── index.ts          # External interface + Overpass adapter
 │   │   ├── normalize.ts      # Shared with scripts/build-course.ts
+│   │   ├── types.ts          # Course/Hole/Position types + isCourseValid
 │   │   └── schema.ts         # Drizzle schema for courses
 │   ├── round/
 │   │   ├── index.ts
 │   │   └── schema.ts
 │   ├── tiles/
-│   └── shots/
-├── components/               # Leaf UI primitives (Button, NumberDisplay, etc.)
+│   ├── shots/
+│   └── theme.ts              # In-house design system (colors/type/space/…)
+├── components/               # Leaf UI primitives
+│   ├── Button.tsx  Card.tsx  ScreenShell.tsx  SectionLabel.tsx
+│   ├── TopBar.tsx  EagleIcon.tsx
+│   └── icons.tsx             # SVG glyphs (custom + lucide re-exports)
 ├── db/
 │   └── index.ts              # Drizzle client setup
-├── courses/                  # Bundled course JSON (committed, version-controlled)
-│   ├── presidio.json
-│   └── ...
+├── courses/                  # Bundled course JSON (committed)
+│   ├── presidio.json  harding-park.json  crystal-springs.json
+│   └── lincoln-park.json  peacock-gap.json
 ├── scripts/
 │   └── build-course.ts       # Node script: OSM ID → courses/<slug>.json
 ├── docs/
 │   ├── PLANNING.md           # This file
-│   └── adr/                  # Architecture Decision Records
+│   └── adr/                  # Architecture Decision Records (0001–0008)
 ├── CONTEXT.md                # Domain language glossary
 └── ...
+
+(No `settings.tsx` yet — onboarding + settings are Phase 7.)
 ```
 
 Screens live in `app/` and stay thin. If a screen file grows past ~200 lines doing math or data parsing inline, that's a signal to push logic down into a module.
@@ -187,8 +199,8 @@ Layout: rangefinder-first. See ASCII mock below.
 └──────────────────────────┘
 ```
 
-- Distance updates every GPS tick (~1 Hz) via `lib/geo`.
-- Map style toggle (vector / satellite) is a small button on the map itself, not in settings.
+- Distance updates every GPS tick (~1 Hz) via `lib/geo`. Numbers are shown in **yards** (converted from metres at the display boundary via `YD_TO_M`).
+- Map controls live on the map itself, not in settings: style toggle (vector / satellite), a reframe button (`frameForHole`), a green-mode toggle that tightens the camera to a green-only frame, and the Landing Zone toggle (Phase 5).
 - "Next" past hole 18 navigates to the post-round scorecard.
 
 ### Tee shot recording
@@ -207,18 +219,20 @@ If user navigates away mid-recording, the in-flight state is preserved in Zustan
 3. Scorecard screen: 18 boxes, enter scores from paper card, "Save."
 4. `lib/round.endRound(round, scores)` sets `ended_at = now()`, writes scores, navigates home.
 
-### Add a course (Phase 5)
+### Add a course (Phase 6)
 
-1. Home → "Add Course" → "Find Nearby."
-2. `lib/course.findNearby(here, 50km)` queries Overpass for `leisure=golf_course` within radius.
+1. Home → "Add Course (Find Nearby)" (`app/courses/add.tsx`).
+2. `lib/course.findNearby(here, radiusKm)` queries Overpass for `leisure=golf_course` ways/relations within radius, sorted nearest-first.
 3. List of matches with name + distance.
-4. Tap one → `lib/course.addCourseFromOverpass(osmId)` fetches full hole data, normalizes via `lib/course/normalize.ts`, inserts row.
-5. If any hole is missing a green polygon, tap-to-fix flow walks the user through dropping pins on satellite imagery.
-6. `lib/tiles.prefetchForCourse(id)` kicks off in background. Progress bar visible.
+4. Tap one → `lib/course.fetchCourseFromOverpass(osmType, osmId)` fetches full hole data and normalizes via `lib/course/normalize.ts`, returning a (possibly partial) `Course` + a `MissingHole[]`. Held in the ephemeral pending-install store.
+5. If any hole is missing a green polygon, the tap-to-fix flow (`app/courses/fix.tsx`) walks the player through tapping green centres; `applyMissingFixes` synthesizes ~9 m circular green polygons until the course is valid.
+6. `lib/course.installCourse(course)` persists it to SQLite. `lib/tiles.prefetchForCourse(id, bounds)` kicks off in the background; the home screen shows per-course tile progress with retry.
 
 ## Phasing plan
 
 Vertical-slice phasing. Each phase ends with something testable on a real round.
+
+**Status (2026-05-29):** Phases 0–6 are code-complete. The MVP (through Phase 4), the Landing Zone overlay (Phase 5), and More Courses + Find Nearby (Phase 6 — five bundled courses, Overpass discovery/fetch, tap-to-fix, SQLite install) are all in. An app icon + adaptive icon have landed and the app was re-themed onto the in-house `lib/theme.ts` design system (Sora typeface, navy/cream/maroon). **Phase 7 (polish & ship)** is next: onboarding, a settings screen (incl. the units toggle — distances are currently yards-only), and the EAS preview build.
 
 ### Phase 0 — Foundation + risk spike (1-2 days)
 
@@ -299,13 +313,13 @@ Pre-shot planning waypoints on the hole map for par 4 and par 5 holes. All state
 
 **Deliverable**: on par 4/5 holes near the tee, two tap-to-place planning waypoints appear with segment distances overlaid on the map. Toggle button lets you force-show or force-hide for unusual holes.
 
-### Phase 6 — More courses + Find Nearby (2-4 days)
+### Phase 6 — More courses + Find Nearby (2-4 days) — done
 
-- Run build script for 2-3 more local courses. Commit JSON.
-- `lib/course` graduates to real-seam: add `findNearby` and `addCourseFromOverpass` adapters. Both share `normalize.ts` with the build script.
-- Tap-to-fix flow for missing greens after fetch.
+- Ran the build script for more local courses. Bundled set: `presidio` (home), `harding-park`, `crystal-springs`, `lincoln-park`, `peacock-gap`.
+- `lib/course` graduated to a real seam: `findNearby` (Overpass discovery) and `fetchCourseFromOverpass` (fetch + normalize) adapters, plus `installCourse` / `removeInstalledCourse` for SQLite-backed courses. All share `normalize.ts` with the build script.
+- Tap-to-fix flow (`app/courses/fix.tsx` + `applyMissingFixes`) synthesizes green polygons for holes missing them after fetch.
 
-**Deliverable**: friends can add their own local courses without a code change.
+**Deliverable**: friends can add their own local courses without a code change. ✅
 
 ### Phase 7 — Polish & ship (2-3 days)
 

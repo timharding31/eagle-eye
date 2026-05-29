@@ -48,6 +48,7 @@ import {
 } from '@/lib/round'
 import {
   cancelTeeShot,
+  CompletedTeeShot,
   markTeeShot,
   startTeeShot,
   useCurrentTeeShot,
@@ -60,6 +61,23 @@ import {
   vectorStyle,
   type LayerKind,
 } from '@/lib/tiles'
+import { IconButton } from '@/components/Button'
+import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  CircleCheckIcon,
+  CrosshairIcon,
+  FlagIcon,
+  FullscreenIcon,
+  GoalIcon,
+  LandPlotIcon,
+} from '@/components/icons'
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  HomeIcon,
+  XIcon,
+} from 'lucide-react-native'
 
 const M_TO_YD = 1.0936133
 const YD_TO_M = 1 / M_TO_YD
@@ -81,12 +99,12 @@ const YD_TO_M = 1 / M_TO_YD
 // GREEN_ZOOM_ADJUST: same log-2 offset for the "zoom to green" frame.
 //   0 ≈ exact fit of the green polygon; negative pulls back to leave
 //   breathing room around the green ring.
-const TOPBAR_CHROME = 164
+const TOPBAR_CHROME = 244
 const DRAWER_CHROME = 272
 const FRAME_SIDE_PAD = 24
-const FRAME_RIGHT_CHROME = 48
-const FRAME_ZOOM_ADJUST = -0.5
-const GREEN_ZOOM_ADJUST = -0.2
+const FRAME_RIGHT_CHROME = 56
+const FRAME_ZOOM_ADJUST = 0
+const GREEN_ZOOM_ADJUST = -1
 
 // Knobs for Landing Zone planning waypoints (par 4 / par 5 only).
 // LZ_HIDE_WITHIN_M: when the player is closer than this to the pin, LZs
@@ -349,6 +367,13 @@ function FramedHoleScreen({
   const [dismissedHoleNum, setDismissedHoleNum] = useState<number | null>(null)
   const shotDismissed = dismissedHoleNum === holeNum
   const [shotBusy, setShotBusy] = useState(false)
+  const shotMode: 'idle' | 'in-flight' | 'done' | 'dismissed' = inFlightHere
+    ? 'in-flight'
+    : completedShot
+      ? 'done'
+      : shotDismissed
+        ? 'dismissed'
+        : 'idle'
 
   const handleStartShot = async () => {
     if (shotBusy) return
@@ -521,13 +546,7 @@ function FramedHoleScreen({
   }
 
   const handleToggleLz = () => {
-    setLzToggle(prev =>
-      prev === 'auto'
-        ? 'force-shown'
-        : prev === 'force-shown'
-          ? 'force-hidden'
-          : 'auto',
-    )
+    setLzToggle(prev => (prev === 'auto' ? 'force-hidden' : 'auto'))
   }
 
   type LzSegment = {
@@ -557,6 +576,7 @@ function FramedHoleScreen({
   // Position the floating reframe / LZ-toggle buttons just under the
   // glass TopBar (insets.top + ~64 bar + small gap).
   const floatingTop = insets.top + 72
+  const floatingBottom = insets.bottom + 108
 
   return (
     <View style={styles.container}>
@@ -658,21 +678,19 @@ function FramedHoleScreen({
           />
         </GeoJSONSource>
 
-        <GeoJSONSource
-          id="pin-src"
-          data={{ type: 'Point', coordinates: [pin.lng, pin.lat] }}
-        >
-          <Layer
-            id="pin-dot"
-            type="circle"
-            paint={{
-              'circle-radius': 9,
-              'circle-color': colors.pinFill,
-              'circle-stroke-color': colors.primary,
-              'circle-stroke-width': 2,
-            }}
-          />
-        </GeoJSONSource>
+        <Marker id="pin-marker" lngLat={[pin.lng, pin.lat]} anchor="bottom">
+          <View style={styles.pinMarker} pointerEvents="none">
+            <FlagIcon
+              width={28}
+              height={28}
+              color={colors.pinFill}
+              fill={colors.pinFill}
+              // style={{ transform: 'translateX(0.125rem)' }}
+              style={{ marginLeft: 14 }}
+            />
+            <View style={styles.pinDot} />
+          </View>
+        </Marker>
 
         {lzVisible &&
           lzPositions.map((lz, i) => (
@@ -702,7 +720,7 @@ function FramedHoleScreen({
         right={
           <IconAction
             label="Home"
-            glyph="⌂"
+            glyph={<HomeIcon color={colors.onSurfaceVariant} />}
             onPress={() =>
               router.canGoBack() ? router.back() : router.replace('/' as never)
             }
@@ -711,41 +729,50 @@ function FramedHoleScreen({
         style={styles.topBarOverlay}
       />
 
-      <TouchableOpacity
-        style={[styles.floatBtn, { top: floatingTop, left: space.md }]}
-        onPress={handleToggleCameraMode}
-        accessibilityLabel={
-          cameraMode === 'green' ? 'Zoom back to hole' : 'Zoom to green'
-        }
-      >
-        <Text style={styles.floatBtnGlyph}>
-          {cameraMode === 'green' ? '⤢' : '⊙'}
-        </Text>
-      </TouchableOpacity>
+      <FpbPanel distances={distances} top={floatingTop} />
 
-      <FgpPanel distances={distances} top={floatingTop} />
+      <View style={[styles.iconButtons, { bottom: floatingBottom }]}>
+        <ShotFloatingRow
+          mode={shotMode}
+          busy={shotBusy}
+          onStart={handleStartShot}
+          onMark={handleMarkShot}
+          onCancel={handleCancelShot}
+          onDismiss={() => setDismissedHoleNum(holeNum)}
+          onUndismiss={() => setDismissedHoleNum(null)}
+          completedShot={completedShot}
+        />
 
-      {currentHole.par >= 4 && cameraMode === 'hole' && (
-        <TouchableOpacity
-          style={[
-            styles.floatBtn,
-            styles.lzBtn,
-            { top: floatingTop, left: space.md + 56 },
-            lzToggle === 'force-shown' && styles.lzBtnShown,
-            lzToggle === 'force-hidden' && styles.lzBtnHidden,
-          ]}
-          onPress={handleToggleLz}
-          accessibilityLabel={`Landing zones: ${lzToggle}`}
-        >
-          <Text style={styles.lzBtnText}>
-            {lzToggle === 'force-shown'
-              ? 'LZ ✓'
-              : lzToggle === 'force-hidden'
-                ? 'LZ ✗'
-                : 'LZ'}
-          </Text>
-        </TouchableOpacity>
-      )}
+        <IconButton
+          glyph={
+            cameraMode === 'green' ? (
+              <FullscreenIcon width={48} height={48} color={colors.primary} />
+            ) : (
+              <GoalIcon width={48} height={48} color={colors.primary} />
+            )
+          }
+          onPress={handleToggleCameraMode}
+          label={cameraMode === 'green' ? 'Zoom back to hole' : 'Zoom to green'}
+          size={72}
+        />
+
+        {currentHole.par >= 4 && cameraMode === 'hole' && (
+          <IconButton
+            glyph={
+              <LandPlotIcon
+                width={48}
+                height={48}
+                color={
+                  lzToggle === 'auto' ? colors.primary : colors.surfaceHighest
+                }
+              />
+            }
+            onPress={handleToggleLz}
+            label={`Landing zones: ${lzToggle}`}
+            size={72}
+          />
+        )}
+      </View>
 
       <BottomDrawer
         insetsBottom={insets.bottom}
@@ -764,22 +791,6 @@ function FramedHoleScreen({
             router.replace(`/round/${num}` as never)
           }
         }}
-        shotMode={
-          inFlightHere
-            ? 'in-flight'
-            : completedShot
-              ? 'done'
-              : shotDismissed
-                ? 'dismissed'
-                : 'idle'
-        }
-        completedShot={completedShot}
-        shotBusy={shotBusy}
-        onStartShot={handleStartShot}
-        onMarkShot={handleMarkShot}
-        onCancelShot={handleCancelShot}
-        onDismissShot={() => setDismissedHoleNum(holeNum)}
-        onUndismissShot={() => setDismissedHoleNum(null)}
       />
 
       {locationGranted === false && (
@@ -806,16 +817,6 @@ interface DrawerProps {
   onPrev: () => void
   onNext: () => void
   onSelectHole: (holeNum: number) => void
-  shotMode: 'idle' | 'in-flight' | 'done' | 'dismissed'
-  completedShot:
-    | { distanceM: number; recordedAt: number; holeNum: number }
-    | undefined
-  shotBusy: boolean
-  onStartShot: () => void
-  onMarkShot: () => void
-  onCancelShot: () => void
-  onDismissShot: () => void
-  onUndismissShot: () => void
 }
 
 // Per-cell size in the hole-grid (square, aspectRatio: 1). Used both for the
@@ -838,14 +839,6 @@ function BottomDrawer({
   onPrev,
   onNext,
   onSelectHole,
-  shotMode,
-  completedShot,
-  shotBusy,
-  onStartShot,
-  onMarkShot,
-  onCancelShot,
-  onDismissShot,
-  onUndismissShot,
 }: DrawerProps) {
   const { width: screenW } = useWindowDimensions()
   const [expanded, setExpanded] = useState(false)
@@ -899,30 +892,14 @@ function BottomDrawer({
         />
       </Animated.View>
 
-      <View style={drawer.body}>
-        <View style={drawer.shotRow}>
-          <ShotPrimary
-            mode={shotMode}
-            completedShot={completedShot}
-            busy={shotBusy}
-            onStart={onStartShot}
-            onMark={onMarkShot}
-            onUndismiss={onUndismissShot}
-          />
-          <ShotSecondary
-            mode={shotMode}
-            onCancel={onCancelShot}
-            onDismiss={onDismissShot}
-            onStart={onStartShot}
-            busy={shotBusy}
-          />
-        </View>
-      </View>
-
       <View style={drawer.nav}>
         <NavButton
           label="PREV"
-          glyph="‹"
+          glyph={
+            <View style={{ paddingTop: 4 }}>
+              <ChevronLeftIcon color={colors.primary} width={32} height={32} />
+            </View>
+          }
           disabled={!prevHole}
           onPress={onPrev}
         />
@@ -941,7 +918,11 @@ function BottomDrawer({
         </TouchableOpacity>
         <NavButton
           label={isLastHole ? 'CARD' : 'NEXT'}
-          glyph="›"
+          glyph={
+            <View style={{ paddingTop: 4 }}>
+              <ChevronRightIcon color={colors.primary} width={32} height={32} />
+            </View>
+          }
           glyphRight
           disabled={!canAdvance}
           onPress={onNext}
@@ -985,7 +966,14 @@ function HoleGrid({
                 >
                   {h.num}
                 </Text>
-                <Text style={drawer.gridCellPar}>PAR {h.par}</Text>
+                <Text
+                  style={[
+                    drawer.gridCellPar,
+                    active && drawer.gridCellParActive,
+                  ]}
+                >
+                  PAR {h.par}
+                </Text>
               </TouchableOpacity>
             )
           })}
@@ -999,118 +987,110 @@ function HoleGrid({
   )
 }
 
-function ShotPrimary({
+function ShotFloatingRow({
   mode,
   completedShot,
   busy,
   onStart,
   onMark,
+  onCancel,
+  onDismiss,
   onUndismiss,
 }: {
-  mode: DrawerProps['shotMode']
-  completedShot: DrawerProps['completedShot']
+  mode: 'idle' | 'in-flight' | 'done' | 'dismissed'
   busy: boolean
   onStart: () => void
   onMark: () => void
-  onUndismiss: () => void
-}) {
-  if (mode === 'in-flight') {
-    return (
-      <TouchableOpacity
-        style={[ctaStyles.cta, ctaStyles.markCta]}
-        onPress={onMark}
-        disabled={busy}
-        activeOpacity={0.85}
-      >
-        <Text style={ctaStyles.glyph}>⛳</Text>
-        <Text style={ctaStyles.label}>MARK TEE SHOT</Text>
-      </TouchableOpacity>
-    )
-  }
-  if (mode === 'done' && completedShot) {
-    const yds = Math.round(completedShot.distanceM * M_TO_YD)
-    return (
-      <View style={[ctaStyles.cta, ctaStyles.doneCta]}>
-        <Text style={ctaStyles.glyph}>⛳</Text>
-        <Text style={ctaStyles.label}>TEE SHOT {yds} YDS</Text>
-      </View>
-    )
-  }
-  if (mode === 'dismissed') {
-    return (
-      <TouchableOpacity
-        style={[ctaStyles.cta, ctaStyles.startCta]}
-        onPress={onUndismiss}
-        activeOpacity={0.85}
-      >
-        <Text style={ctaStyles.glyph}>⛳</Text>
-        <Text style={ctaStyles.label}>RECORD TEE SHOT</Text>
-      </TouchableOpacity>
-    )
-  }
-  // idle
-  return (
-    <TouchableOpacity
-      style={[ctaStyles.cta, ctaStyles.startCta]}
-      onPress={onStart}
-      disabled={busy}
-      activeOpacity={0.85}
-    >
-      <Text style={ctaStyles.glyph}>⛳</Text>
-      <Text style={ctaStyles.label}>START TEE SHOT</Text>
-    </TouchableOpacity>
-  )
-}
-
-function ShotSecondary({
-  mode,
-  onCancel,
-  onDismiss,
-  onStart,
-  busy,
-}: {
-  mode: DrawerProps['shotMode']
   onCancel: () => void
   onDismiss: () => void
-  onStart: () => void
-  busy: boolean
+  onUndismiss: () => void
+  completedShot?: CompletedTeeShot
 }) {
+  const showX = mode === 'in-flight'
+
+  const [pulseAnim] = useState(() => new Animated.Value(1))
+  useEffect(() => {
+    if (mode !== 'in-flight') {
+      pulseAnim.setValue(1)
+      return
+    }
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.35,
+          duration: 1250,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1250,
+          useNativeDriver: true,
+        }),
+      ]),
+    )
+    anim.start()
+    return () => anim.stop()
+  }, [mode, pulseAnim])
+
+  let icon: React.ReactElement
+  let label: string
+  let onPress: () => void
+
   if (mode === 'in-flight') {
-    return (
-      <TouchableOpacity
-        style={ctaStyles.iconBtn}
-        onPress={onCancel}
-        accessibilityLabel="Cancel tee shot"
-      >
-        <Text style={ctaStyles.iconBtnGlyph}>✕</Text>
-      </TouchableOpacity>
+    icon = (
+      <Animated.View style={{ opacity: pulseAnim }}>
+        <CrosshairIcon width={48} height={48} color={colors.primary} />
+      </Animated.View>
     )
-  }
-  if (mode === 'done') {
-    return (
-      <TouchableOpacity
-        style={ctaStyles.iconBtn}
-        onPress={onStart}
-        disabled={busy}
-        accessibilityLabel="Re-record tee shot"
-      >
-        <Text style={ctaStyles.iconBtnGlyph}>↻</Text>
-      </TouchableOpacity>
+    label = 'Mark tee shot'
+    onPress = onMark
+  } else if (mode === 'done') {
+    icon = <CircleCheckIcon width={48} height={48} color={colors.primary} />
+    label = 'Re-record tee shot'
+    onPress = onStart
+  } else if (mode === 'dismissed') {
+    icon = (
+      <CrosshairIcon width={48} height={48} color={colors.onSurfaceVariant} />
     )
+    label = 'Record tee shot'
+    onPress = onUndismiss
+  } else {
+    icon = <CrosshairIcon width={48} height={48} color={colors.primary} />
+    label = 'Start tee shot'
+    onPress = onStart
   }
-  // idle / dismissed
+
   return (
-    <TouchableOpacity
-      style={ctaStyles.iconBtn}
-      onPress={onDismiss}
-      accessibilityLabel="Dismiss tee shot prompt"
-    >
-      <Text style={ctaStyles.iconBtnGlyph}>✕</Text>
-    </TouchableOpacity>
+    <View style={styles.shotFloatingRow}>
+      {showX ? (
+        <IconButton
+          glyph={<XIcon width={48} height={48} stroke={colors.onError} />}
+          onPress={mode === 'in-flight' ? onCancel : onDismiss}
+          label={
+            mode === 'in-flight' ? 'Cancel tee shot' : 'Dismiss tee shot prompt'
+          }
+          size={54}
+          variant="ghost"
+        />
+      ) : completedShot ? (
+        <Text
+          style={[type.dataLabel, { color: colors.primary, fontWeight: '900' }]}
+        >
+          {fmtYds(Math.round(completedShot.distanceM * YD_TO_M))}YD
+        </Text>
+      ) : null}
+      <IconButton
+        glyph={icon}
+        onPress={onPress}
+        label={label}
+        size={72}
+        disabled={busy}
+      />
+    </View>
   )
 }
 
-function FgpPanel({
+function FpbPanel({
   distances,
   top,
 }: {
@@ -1118,36 +1098,76 @@ function FgpPanel({
   top: number
 }) {
   return (
-    <View style={[fgp.panel, { top }]} pointerEvents="none">
-      <FgpCell label="BACK" value={distances?.back} />
-      <View style={fgp.divider} />
-      <FgpCell label="PIN" value={distances?.pin} primary />
-      <View style={fgp.divider} />
-      <FgpCell label="FRONT" value={distances?.front} />
+    <View style={[fpb.panel, { top }]} pointerEvents="none">
+      <FpbCell value={distances?.back} back />
+      <View style={fpb.divider} />
+      <FpbCell value={distances?.pin} primary />
+      <View style={fpb.divider} />
+      <FpbCell value={distances?.front} front />
     </View>
   )
 }
 
-function FgpCell({
-  label,
+function FpbCell({
+  label = null,
   value,
   primary,
+  front,
+  back,
 }: {
-  label: string
+  label?: string | null
   value: number | undefined
   primary?: boolean
+  back?: boolean
+  front?: boolean
 }) {
   const yds = value != null ? Math.round(value * M_TO_YD) : null
   return (
-    <View style={fgp.cell}>
-      <Text style={[fgp.label, primary && fgp.labelPrimary]}>{label}</Text>
-      <Text style={[fgp.value, primary && fgp.valuePrimary]}>
-        {yds == null ? '—' : `${yds}`}
-      </Text>
+    <View style={fpb.cell}>
+      <View
+        style={{
+          flexDirection: 'row',
+          flexGrow: 0,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        {(front || back) && (
+          <Text
+            style={{
+              ...fpb.value,
+              // fontSize: 24,
+            }}
+          >
+            {front ? (
+              <ChevronDownIcon width={24} height={24} color={colors.primary} />
+            ) : (
+              <ChevronUpIcon width={24} height={24} color={colors.primary} />
+            )}
+          </Text>
+        )}
+        {label && (
+          <Text style={[fpb.label, primary && fpb.labelPrimary]}>{label}</Text>
+        )}
+        <Text
+          style={[
+            fpb.value,
+            primary ? fpb.valuePrimary : { color: colors.onSurfaceVariant },
+            { flexGrow: 1, textAlign: 'right' },
+          ]}
+        >
+          {fmtYds(yds)}
+        </Text>
+      </View>
     </View>
   )
 }
 
+function fmtYds(yds: number | null) {
+  if (yds == null) return '--'
+  if (yds < 1e3) return String(yds)
+  return (yds / 1e3).toFixed(1) + 'K'
+}
 function NavButton({
   label,
   glyph,
@@ -1156,7 +1176,7 @@ function NavButton({
   onPress,
 }: {
   label: string
-  glyph: string
+  glyph: string | React.ReactNode
   glyphRight?: boolean
   disabled?: boolean
   onPress: () => void
@@ -1213,6 +1233,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Sora_700Bold',
   },
 
+  iconButtons: {
+    position: 'absolute',
+    right: 16,
+    display: 'flex',
+    flexDirection: 'column-reverse',
+    alignItems: 'flex-end',
+    gap: 16,
+  },
+
   lzBtn: {
     width: 52,
     height: 44,
@@ -1252,6 +1281,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  pinMarker: {
+    alignItems: 'center',
+  },
+  pinDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.pinFill,
+    borderWidth: 1.5,
+    borderColor: colors.pinFill,
+    // borderColor: colors.primary,
+    marginTop: -2,
+  },
+
   lzLabel: {
     backgroundColor: colors.glass,
     borderRadius: radius.sm,
@@ -1276,6 +1319,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   centerMsgText: { ...type.bodyMd, textAlign: 'center' },
+
+  shotFloatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
 })
 
 const drawer = StyleSheet.create({
@@ -1288,17 +1337,6 @@ const drawer = StyleSheet.create({
     borderTopLeftRadius: radius['3xl'],
     borderTopRightRadius: radius['3xl'],
     ...shadows.drawer,
-  },
-  body: {
-    paddingHorizontal: space.marginMobile,
-    paddingTop: space.lg,
-    paddingBottom: space.md,
-    gap: space.md,
-  },
-  shotRow: {
-    flexDirection: 'row',
-    gap: space.sm,
-    alignItems: 'stretch',
   },
   nav: {
     height: 88,
@@ -1355,8 +1393,7 @@ const drawer = StyleSheet.create({
     gap: 2,
   },
   gridCellActive: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.primary,
+    backgroundColor: colors.goldenEagle,
   },
   gridCellSpacer: { flex: 1 },
   gridCellNum: {
@@ -1366,7 +1403,7 @@ const drawer = StyleSheet.create({
     lineHeight: 20,
   },
   gridCellNumActive: {
-    color: colors.onSecondary,
+    color: colors.surfaceHighest,
   },
   gridCellPar: {
     color: colors.onSurfaceVariant,
@@ -1374,14 +1411,17 @@ const drawer = StyleSheet.create({
     fontSize: 9,
     letterSpacing: 1.2,
   },
+  gridCellParActive: {
+    color: colors.surfaceLow,
+  },
 })
 
-const fgp = StyleSheet.create({
+const fpb = StyleSheet.create({
   panel: {
     position: 'absolute',
     right: space.sm,
     backgroundColor: colors.glass,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.outlineVariant,
     paddingVertical: space.sm,
@@ -1412,55 +1452,13 @@ const fgp = StyleSheet.create({
     fontSize: 22,
     lineHeight: 26,
     fontVariant: ['tabular-nums'],
+    alignItems: 'center',
   },
   valuePrimary: {
     color: colors.primary,
     fontSize: 34,
     lineHeight: 38,
     letterSpacing: -0.5,
-  },
-})
-
-const ctaStyles = StyleSheet.create({
-  cta: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 56,
-    borderRadius: radius.xl,
-    gap: 10,
-    paddingHorizontal: space.md,
-    ...shadows.cta,
-  },
-  startCta: { backgroundColor: colors.secondary },
-  markCta: { backgroundColor: '#a83232' },
-  doneCta: {
-    backgroundColor: colors.surfaceHigh,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.outlineVariant,
-  },
-  glyph: { color: colors.primary, fontSize: 20 },
-  label: {
-    color: colors.primary,
-    fontFamily: 'Sora_700Bold',
-    fontSize: 16,
-    letterSpacing: 0.5,
-  },
-  iconBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surfaceHigh,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.outlineVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconBtnGlyph: {
-    color: colors.onSurface,
-    fontSize: 20,
-    fontFamily: 'Sora_700Bold',
   },
 })
 

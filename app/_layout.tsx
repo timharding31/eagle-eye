@@ -1,9 +1,7 @@
 import { useEffect } from 'react'
-import { config } from '@/lib/gluestack-ui-theme'
-import { GluestackUIProvider } from '@gluestack-ui/themed'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
-import { ActivityIndicator, LogBox, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator'
 import { useFonts } from 'expo-font'
@@ -20,10 +18,6 @@ import migrations from '@/drizzle/migrations'
 import { ensureHydrated } from '@/lib/round'
 import { ensureHydrated as ensureShotsHydrated } from '@/lib/shots'
 import { colors, type } from '@/lib/theme'
-
-// Gluestack still imports SafeAreaView from 'react-native' (deprecated in 0.85).
-// We don't render any SafeAreaView ourselves — silence the upstream noise.
-LogBox.ignoreLogs([/SafeAreaView has been deprecated/])
 
 export default function RootLayout() {
   const { success, error } = useMigrations(db, migrations)
@@ -45,25 +39,23 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <GluestackUIProvider config={config}>
-        <StatusBar style="light" />
-        {error ? (
-          <BootMessage
-            text={`Database migration failed:\n${error.message}`}
-            error
-          />
-        ) : !success || !fontsLoaded ? (
-          <BootMessage text="Preparing…" busy />
-        ) : (
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.surface },
-              animation: 'fade',
-            }}
-          />
-        )}
-      </GluestackUIProvider>
+      <StatusBar style="light" />
+      {error ? (
+        <BootMessage
+          text={`Database migration failed:\n${error.message}`}
+          error
+        />
+      ) : !success || !fontsLoaded ? (
+        <BootMessage text="Preparing…" busy />
+      ) : (
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.surface },
+            animation: 'fade',
+          }}
+        />
+      )}
     </SafeAreaProvider>
   )
 }

@@ -40,7 +40,8 @@ export const satelliteStyle: StyleSpecification = satelliteStyleSpec
 export const satelliteStyleJSON = JSON.stringify(satelliteStyleSpec)
 
 const MIN_ZOOM = 16
-const MAX_ZOOM = 18
+// z=19 is the ESRI source limit (~0.6m/px); needed for sharp green-mode zoom.
+const MAX_ZOOM = 19
 // Per ADR-008: expand the bbox slightly so holes that hug the OSM polygon
 // boundary don't hit missing tiles.
 const BBOX_EXPAND_PCT = 0.07
@@ -110,18 +111,21 @@ function expandBounds(b: BBox): BBox {
   return [w - lngPad, s - latPad, e + lngPad, n + latPad]
 }
 
+// On Android, MapLibre doesn't persist 'complete' across app restarts — a
+// finished pack comes back as 'inactive' with percentage=100. Use percentage
+// as a fallback so we don't re-download already-complete packs.
 function packStateToLayerState(
-  s: OfflinePackStatus['state'],
+  status: OfflinePackStatus,
 ): Exclude<LayerState, 'error'> {
-  if (s === 'complete') return 'complete'
-  if (s === 'active') return 'downloading'
+  if (status.state === 'complete' || status.percentage >= 100) return 'complete'
+  if (status.state === 'active') return 'downloading'
   return 'idle'
 }
 
 function onProgress(courseId: string, layer: LayerKind) {
   return (_pack: OfflinePack, status: OfflinePackStatus) => {
     setLayer(courseId, layer, {
-      state: packStateToLayerState(status.state),
+      state: packStateToLayerState(status),
       percentage: status.percentage,
       errorMessage: undefined,
     })
@@ -145,11 +149,12 @@ async function downloadLayer(
   const existing = await findPack(courseId, layer)
   if (existing) {
     const status = await existing.status()
+    const layerState = packStateToLayerState(status)
     setLayer(courseId, layer, {
-      state: packStateToLayerState(status.state),
+      state: layerState,
       percentage: status.percentage,
     })
-    if (status.state === 'complete') return
+    if (layerState === 'complete') return
 
     await OfflineManager.addListener(
       existing.id,
@@ -163,7 +168,7 @@ async function downloadLayer(
 
   setLayer(courseId, layer, { state: 'downloading', percentage: 0 })
   const mapStyle = layer === 'vector' ? vectorStyle : satelliteStyleJSON
-  await OfflineManager.createPack(
+  const pack = await OfflineManager.createPack(
     {
       mapStyle,
       bounds: expandBounds(bounds),
@@ -174,6 +179,19 @@ async function downloadLayer(
     onProgress(courseId, layer),
     onError(courseId, layer),
   )
+  // Race guard: createPack starts the native download before registering the JS
+  // listener. Fast packs (vector tiles are tiny) can complete in this window —
+  // the onProgress 'complete' event fires before addListener wires up, so it's
+  // lost and the store stays stuck at downloading/0%. Poll status once now that
+  // the listener is live to catch any missed completion.
+  const st = await pack.status()
+  if (st.state !== 'active') {
+    setLayer(courseId, layer, {
+      state: packStateToLayerState(st),
+      percentage: st.percentage,
+      errorMessage: undefined,
+    })
+  }
 }
 
 const inFlight = new Map<string, Promise<void>>()
@@ -219,7 +237,7 @@ export async function prefetchStatus(
 async function packToStatus(pack: OfflinePack): Promise<LayerStatus> {
   const st = await pack.status()
   return {
-    state: packStateToLayerState(st.state),
+    state: packStateToLayerState(st),
     percentage: st.percentage,
   }
 }

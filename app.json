@@ -5,11 +5,12 @@
     "version": "0.1.0",
     "scheme": "eagle-eye",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "android": {
       "package": "com.timharding.eagleeye",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#1a472a"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0c1530"
       },
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",

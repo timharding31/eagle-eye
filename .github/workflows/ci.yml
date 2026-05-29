@@ -1,0 +1,41 @@
+name: CI
+
+# Cheap, fast gate (no EAS build, no cost): lint + typecheck + format check.
+# This is the project's safety net in place of a test suite — strict TypeScript
+# is the primary bug catcher, so a green `tsc` is the bar for merging.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck, format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci # reads .npmrc (legacy-peer-deps=true)
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check

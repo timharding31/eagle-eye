@@ -21,8 +21,6 @@ interface TopBarProps {
   style?: ViewStyle
 }
 
-const EAGLE_ICON = require('@/assets/icon.png')
-
 export function TopBar({
   title,
   subtitle,
@@ -75,7 +73,7 @@ export function TopBar({
 interface IconActionProps {
   onPress: () => void
   label: string
-  glyph: string
+  glyph: string | React.ReactElement
 }
 
 export function IconAction({ onPress, label, glyph }: IconActionProps) {
@@ -93,6 +91,7 @@ export function IconAction({ onPress, label, glyph }: IconActionProps) {
 
 const styles = StyleSheet.create({
   bar: {
+    overflow: 'hidden',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.outlineVariant,
   },
@@ -112,8 +111,8 @@ const styles = StyleSheet.create({
   },
   right: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   logo: {
-    width: 60,
-    height: 60,
+    width: 128,
+    height: 128,
     borderRadius: radius.full,
   },
   backBtn: {

@@ -20,6 +20,7 @@ interface ButtonProps {
   disabled?: boolean
   leading?: ReactNode
   style?: ViewStyle
+  children?: React.ReactNode
 }
 
 export function Button({
@@ -30,6 +31,7 @@ export function Button({
   disabled,
   leading,
   style,
+  children,
 }: ButtonProps) {
   return (
     <TouchableOpacity
@@ -45,7 +47,9 @@ export function Button({
       ]}
     >
       {leading}
-      <Text style={[styles.label, variantLabel[variant]]}>{label}</Text>
+      {children || (
+        <Text style={[styles.label, variantLabel[variant]]}>{label}</Text>
+      )}
     </TouchableOpacity>
   )
 }
@@ -94,11 +98,11 @@ const variantLabel: Record<Variant, TextStyle> = {
 }
 
 interface IconButtonProps {
-  glyph: string
+  glyph: string | React.ReactElement
   onPress: () => void
   label: string
   size?: number
-  variant?: 'secondary' | 'danger'
+  variant?: 'primary' | 'danger' | 'glass' | 'ghost'
   disabled?: boolean
 }
 
@@ -107,7 +111,7 @@ export function IconButton({
   onPress,
   label,
   size = 56,
-  variant = 'secondary',
+  variant = 'primary',
   disabled,
 }: IconButtonProps) {
   return (
@@ -119,7 +123,14 @@ export function IconButton({
       style={[
         iconBtnStyles.base,
         { width: size, height: size },
-        variant === 'danger' && iconBtnStyles.danger,
+        (
+          {
+            primary: '',
+            danger: iconBtnStyles.danger,
+            glass: iconBtnStyles.glass,
+            ghost: iconBtnStyles.ghost,
+          } as const
+        )[variant],
         disabled && styles.disabled,
       ]}
     >
@@ -131,13 +142,21 @@ export function IconButton({
 const iconBtnStyles = StyleSheet.create({
   base: {
     backgroundColor: colors.surfaceHigh,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.outlineVariant,
   },
-  danger: { backgroundColor: colors.errorContainer, borderColor: colors.error },
+  danger: { backgroundColor: colors.errorContainer },
+  glass: {
+    backgroundColor: colors.glassSoft,
+    borderColor: colors.surfaceHighest,
+  },
+  ghost: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+  },
   glyph: {
     color: colors.onSurface,
     fontFamily: 'Sora_700Bold',

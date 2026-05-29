@@ -234,7 +234,7 @@ export default function HomeScreen() {
                       ) : (
                         <Text style={styles.courseName}>{c.name}</Text>
                       )}
-                      <PrefetchRow course={c} />
+                      {/* <PrefetchRow course={c} /> */}
                     </View>
                     <Button
                       label="Start"
@@ -249,7 +249,6 @@ export default function HomeScreen() {
             <Button
               label="+ Add Course (Find Nearby)"
               variant="secondary"
-              size="md"
               onPress={() => router.push('/courses/add' as never)}
               disabled={busy}
               style={{ marginTop: space.sm }}
@@ -257,19 +256,12 @@ export default function HomeScreen() {
           </View>
         )}
 
-        <View style={[styles.section, { marginTop: space.md }]}>
+        <View style={[styles.section, { marginTop: space.lg }]}>
           <Button
             label="Round History"
-            variant="secondary"
             onPress={() => router.push('/history' as never)}
             disabled={busy}
-          />
-          <Button
-            label="Map Spike"
             variant="ghost"
-            size="md"
-            onPress={() => router.push('/spike' as never)}
-            disabled={busy}
           />
         </View>
 
@@ -286,7 +278,6 @@ export default function HomeScreen() {
 function PrefetchRow({ course }: { course: CourseSummary }) {
   const status = usePrefetchStatus(course.slug)
   const summary = summarizePrefetch(status)
-  const showRetry = summary.kind === 'error'
 
   return (
     <View style={styles.prefetchRow}>
@@ -300,17 +291,22 @@ function PrefetchRow({ course }: { course: CourseSummary }) {
       >
         {summary.label}
       </Text>
-      {showRetry && (
-        <TouchableOpacity
-          onPress={() =>
-            retryPrefetch(course.slug, course.bounds).catch(e =>
-              console.error('retryPrefetch', e),
-            )
-          }
+      <TouchableOpacity
+        onPress={() =>
+          retryPrefetch(course.slug, course.bounds).catch(e =>
+            console.error('retryPrefetch', e),
+          )
+        }
+      >
+        <Text
+          style={[
+            styles.prefetchRetry,
+            summary.kind === 'ready' && styles.prefetchRetryMuted,
+          ]}
         >
-          <Text style={styles.prefetchRetry}>Retry</Text>
-        </TouchableOpacity>
-      )}
+          {summary.kind === 'ready' ? '↺' : 'Retry'}
+        </Text>
+      </TouchableOpacity>
     </View>
   )
 }
@@ -331,9 +327,19 @@ function summarizePrefetch(status: PrefetchStatus | null): PrefetchSummary {
   if (vector.state === 'complete' && satellite.state === 'complete') {
     return { kind: 'ready', label: '✓ Offline tiles ready' }
   }
-  if (vector.state === 'downloading' || satellite.state === 'downloading') {
-    const pct = Math.round((vector.percentage + satellite.percentage) / 2)
-    return { kind: 'downloading', label: `Downloading tiles… ${pct}%` }
+  const vecActive = vector.state === 'downloading'
+  const satActive = satellite.state === 'downloading'
+  if (vecActive || satActive) {
+    let pct: number
+    if (vecActive && satActive) {
+      pct = Math.round((vector.percentage + satellite.percentage) / 2)
+    } else {
+      // One layer is already complete — show only the in-progress layer's
+      // own percentage so a finished layer's 100% can't inflate the number.
+      pct = vecActive ? vector.percentage : satellite.percentage
+    }
+    const label = pct > 0 ? `Downloading tiles… ${pct}%` : 'Downloading tiles…'
+    return { kind: 'downloading', label }
   }
   return { kind: 'pending', label: 'Preparing offline tiles…' }
 }
@@ -427,5 +433,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Sora_700Bold',
     fontSize: 12,
     paddingHorizontal: space.sm,
+  },
+  prefetchRetryMuted: {
+    color: colors.onSurfaceMuted,
+    fontFamily: 'Sora_400Regular',
   },
 })
