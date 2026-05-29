@@ -30,13 +30,7 @@ import {
   useIsHydrated,
 } from '@/lib/round'
 import { colors, radius, space, type } from '@/lib/theme'
-import {
-  prefetchForCourse,
-  prefetchStatus,
-  retryPrefetch,
-  usePrefetchStatus,
-  type PrefetchStatus,
-} from '@/lib/tiles'
+import { prefetchForCourse, prefetchStatus } from '@/lib/tiles'
 
 export default function HomeScreen() {
   const router = useRouter()
@@ -234,7 +228,6 @@ export default function HomeScreen() {
                       ) : (
                         <Text style={styles.courseName}>{c.name}</Text>
                       )}
-                      {/* <PrefetchRow course={c} /> */}
                     </View>
                     <Button
                       label="Start"
@@ -273,75 +266,6 @@ export default function HomeScreen() {
       </ScrollView>
     </ScreenShell>
   )
-}
-
-function PrefetchRow({ course }: { course: CourseSummary }) {
-  const status = usePrefetchStatus(course.slug)
-  const summary = summarizePrefetch(status)
-
-  return (
-    <View style={styles.prefetchRow}>
-      <Text
-        style={[
-          styles.prefetchText,
-          summary.kind === 'error' && styles.prefetchTextError,
-          summary.kind === 'ready' && styles.prefetchTextReady,
-        ]}
-        numberOfLines={1}
-      >
-        {summary.label}
-      </Text>
-      <TouchableOpacity
-        onPress={() =>
-          retryPrefetch(course.slug, course.bounds).catch(e =>
-            console.error('retryPrefetch', e),
-          )
-        }
-      >
-        <Text
-          style={[
-            styles.prefetchRetry,
-            summary.kind === 'ready' && styles.prefetchRetryMuted,
-          ]}
-        >
-          {summary.kind === 'ready' ? '↺' : 'Retry'}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  )
-}
-
-type PrefetchSummary =
-  | { kind: 'pending'; label: string }
-  | { kind: 'downloading'; label: string }
-  | { kind: 'ready'; label: string }
-  | { kind: 'error'; label: string }
-
-function summarizePrefetch(status: PrefetchStatus | null): PrefetchSummary {
-  if (!status) return { kind: 'pending', label: 'Checking offline tiles…' }
-  const { vector, satellite } = status
-  if (vector.state === 'error' || satellite.state === 'error') {
-    const msg = vector.errorMessage ?? satellite.errorMessage ?? 'unknown'
-    return { kind: 'error', label: `Tile download failed (${msg})` }
-  }
-  if (vector.state === 'complete' && satellite.state === 'complete') {
-    return { kind: 'ready', label: '✓ Offline tiles ready' }
-  }
-  const vecActive = vector.state === 'downloading'
-  const satActive = satellite.state === 'downloading'
-  if (vecActive || satActive) {
-    let pct: number
-    if (vecActive && satActive) {
-      pct = Math.round((vector.percentage + satellite.percentage) / 2)
-    } else {
-      // One layer is already complete — show only the in-progress layer's
-      // own percentage so a finished layer's 100% can't inflate the number.
-      pct = vecActive ? vector.percentage : satellite.percentage
-    }
-    const label = pct > 0 ? `Downloading tiles… ${pct}%` : 'Downloading tiles…'
-    return { kind: 'downloading', label }
-  }
-  return { kind: 'pending', label: 'Preparing offline tiles…' }
 }
 
 function formatStarted(ts: number): string {
@@ -418,24 +342,4 @@ const styles = StyleSheet.create({
     borderColor: colors.error,
   },
   errorText: { ...type.bodyMd, color: colors.primary },
-
-  prefetchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 2,
-  },
-  prefetchText: { ...type.labelXs, flex: 1, textTransform: 'none' as const },
-  prefetchTextReady: { color: colors.onSurfaceVariant },
-  prefetchTextError: { color: colors.error },
-  prefetchRetry: {
-    color: colors.primary,
-    fontFamily: 'Sora_700Bold',
-    fontSize: 12,
-    paddingHorizontal: space.sm,
-  },
-  prefetchRetryMuted: {
-    color: colors.onSurfaceMuted,
-    fontFamily: 'Sora_400Regular',
-  },
 })

@@ -1,5 +1,5 @@
 import React from 'react'
-import Svg, { Circle, Path, Rect } from 'react-native-svg'
+import Svg, { Path, Rect } from 'react-native-svg'
 
 export {
   CircleCheckIcon,
