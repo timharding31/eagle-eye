@@ -39,6 +39,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Drizzle migrations
+        # drizzle/ is gitignored but inline-imported at build time
+        # (@/drizzle/migrations, *.sql). EAS archives the runner's working tree,
+        # so the artifact must exist locally before `eas build` uploads it —
+        # otherwise Metro fails with "Unable to resolve @/drizzle/migrations".
+        run: npm run db:generate
+
       - name: Build Android production (APK)
         id: build
         run: |

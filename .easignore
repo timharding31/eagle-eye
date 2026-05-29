@@ -1,8 +1,11 @@
 # Dependencies
 node_modules/
 pnpm-lock.yaml.bak
-package-lock.json
 yarn.lock
+# NOTE: package-lock.json is intentionally NOT ignored — it must be uploaded so
+# EAS installs with npm (matching .npmrc) and pins exact versions. Without it,
+# EAS finds no lockfile and falls back to yarn, which floats deps off our ^
+# ranges (e.g. react-native-svg 15.15.4 -> 15.15.5, failing expo-doctor).
 
 # Build outputs
 dist/
