@@ -110,9 +110,10 @@ const styles = StyleSheet.create({
   },
   right: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   logo: {
-    width: 128,
-    height: 128,
+    width: 124,
+    height: 124,
     borderRadius: radius.full,
+    marginTop: 2,
   },
   backBtn: {
     width: 44,
@@ -133,7 +134,7 @@ const styles = StyleSheet.create({
   },
   titleBlock: { flex: 1, gap: 2 },
   title: { ...type.headlineMd, color: colors.primary },
-  subtitle: { ...type.labelXs },
+  subtitle: { ...type.labelSm },
 })
 
 const iconActionStyles = StyleSheet.create({
