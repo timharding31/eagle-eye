@@ -14,7 +14,7 @@ import {
 } from '@expo-google-fonts/sora'
 
 import { db } from '@/db'
-import migrations from '@/drizzle/migrations'
+import migrations from '@/db/migrations'
 import { ensureHydrated } from '@/lib/round'
 import { ensureHydrated as ensureShotsHydrated } from '@/lib/shots'
 import { colors, type } from '@/lib/theme'
