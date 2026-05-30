@@ -752,8 +752,9 @@ function FramedHoleScreen({
             )
           }
           onPress={handleToggleCameraMode}
-          label={cameraMode === 'green' ? 'Zoom back to hole' : 'Zoom to green'}
-          size={72}
+          label={cameraMode === 'green' ? 'Hole' : 'Green'}
+          size={80}
+          variant="glass"
         />
 
         {currentHole.par >= 4 && cameraMode === 'hole' && (
@@ -763,13 +764,14 @@ function FramedHoleScreen({
                 width={48}
                 height={48}
                 color={
-                  lzToggle === 'auto' ? colors.primary : colors.surfaceHighest
+                  lzToggle === 'auto' ? colors.onSurface : colors.surfaceHigh
                 }
               />
             }
             onPress={handleToggleLz}
-            label={`Landing zones: ${lzToggle}`}
-            size={72}
+            label={`LZ${lzToggle === 'auto' ? '' : ': OFF'}`}
+            size={80}
+            variant="glass"
           />
         )}
       </View>
@@ -897,7 +899,11 @@ function BottomDrawer({
           label="PREV"
           glyph={
             <View style={{ paddingTop: 4 }}>
-              <ChevronLeftIcon color={colors.primary} width={32} height={32} />
+              <ChevronLeftIcon
+                color={colors.onSurfaceVariant}
+                width={32}
+                height={32}
+              />
             </View>
           }
           disabled={!prevHole}
@@ -920,7 +926,11 @@ function BottomDrawer({
           label={isLastHole ? 'CARD' : 'NEXT'}
           glyph={
             <View style={{ paddingTop: 4 }}>
-              <ChevronRightIcon color={colors.primary} width={32} height={32} />
+              <ChevronRightIcon
+                color={colors.onSurfaceVariant}
+                width={32}
+                height={32}
+              />
             </View>
           }
           glyphRight
@@ -1042,21 +1052,23 @@ function ShotFloatingRow({
         <CrosshairIcon width={48} height={48} color={colors.primary} />
       </Animated.View>
     )
-    label = 'Mark tee shot'
+    label = 'Mark'
     onPress = onMark
   } else if (mode === 'done') {
     icon = <CircleCheckIcon width={48} height={48} color={colors.primary} />
-    label = 'Re-record tee shot'
+    label = completedShot
+      ? `${fmtYds(Math.round(completedShot.distanceM * YD_TO_M))}YD`
+      : 'Restart'
     onPress = onStart
   } else if (mode === 'dismissed') {
     icon = (
       <CrosshairIcon width={48} height={48} color={colors.onSurfaceVariant} />
     )
-    label = 'Record tee shot'
+    label = 'Record'
     onPress = onUndismiss
   } else {
     icon = <CrosshairIcon width={48} height={48} color={colors.primary} />
-    label = 'Start tee shot'
+    label = 'Track'
     onPress = onStart
   }
 
@@ -1064,27 +1076,20 @@ function ShotFloatingRow({
     <View style={styles.shotFloatingRow}>
       {showX ? (
         <IconButton
-          glyph={<XIcon width={48} height={48} stroke={colors.onError} />}
+          glyph={<XIcon width={48} height={48} color={colors.onError} />}
           onPress={mode === 'in-flight' ? onCancel : onDismiss}
-          label={
-            mode === 'in-flight' ? 'Cancel tee shot' : 'Dismiss tee shot prompt'
-          }
-          size={54}
+          label="Cancel"
+          size={80}
           variant="ghost"
         />
-      ) : completedShot ? (
-        <Text
-          style={[type.dataLabel, { color: colors.primary, fontWeight: '900' }]}
-        >
-          {fmtYds(Math.round(completedShot.distanceM * YD_TO_M))}YD
-        </Text>
       ) : null}
       <IconButton
         glyph={icon}
         onPress={onPress}
         label={label}
-        size={72}
+        size={80}
         disabled={busy}
+        variant="glass"
       />
     </View>
   )
@@ -1168,6 +1173,9 @@ function fmtYds(yds: number | null) {
   if (yds < 1e3) return String(yds)
   return (yds / 1e3).toFixed(1) + 'K'
 }
+
+const TEST = false
+
 function NavButton({
   label,
   glyph,
@@ -1176,11 +1184,23 @@ function NavButton({
   onPress,
 }: {
   label: string
-  glyph: string | React.ReactNode
+  glyph: string | React.ReactElement
   glyphRight?: boolean
   disabled?: boolean
   onPress: () => void
 }) {
+  if (TEST) {
+    return (
+      <IconButton
+        variant="ghost"
+        size={'40%' as any}
+        onPress={onPress}
+        disabled={disabled}
+        label={label}
+        glyph={glyph}
+      />
+    )
+  }
   return (
     <TouchableOpacity
       style={[navBtn.wrap, disabled && navBtn.disabled]}
@@ -1305,7 +1325,7 @@ const styles = StyleSheet.create({
   shotFloatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 8,
   },
 })
 
@@ -1341,12 +1361,12 @@ const drawer = StyleSheet.create({
     gap: 6,
   },
   navCenterNum: {
-    color: colors.primary,
     fontFamily: 'Sora_700Bold',
-    fontSize: 24,
-    lineHeight: 24,
+    fontSize: 40,
+    lineHeight: 40,
+    color: colors.goldenEagle,
   },
-  navCenterLabel: { ...type.labelXs },
+  navCenterLabel: { ...type.labelXs, color: colors.goldenEagle },
 
   gridWrap: {
     overflow: 'hidden',

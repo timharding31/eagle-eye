@@ -7,7 +7,7 @@ import {
   ViewStyle,
 } from 'react-native'
 
-import { colors, radius, shadows, space } from '@/lib/theme'
+import { colors, radius, shadows, space, type } from '@/lib/theme'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type Size = 'md' | 'lg'
@@ -100,7 +100,7 @@ const variantLabel: Record<Variant, TextStyle> = {
 interface IconButtonProps {
   glyph: string | React.ReactElement
   onPress: () => void
-  label: string
+  label?: string
   size?: number
   variant?: 'primary' | 'danger' | 'glass' | 'ghost'
   disabled?: boolean
@@ -122,7 +122,7 @@ export function IconButton({
       activeOpacity={0.85}
       style={[
         iconBtnStyles.base,
-        { width: size, height: size },
+        { width: size, height: 'auto' },
         (
           {
             primary: '',
@@ -134,6 +134,16 @@ export function IconButton({
         disabled && styles.disabled,
       ]}
     >
+      {label && (
+        <Text
+          style={[
+            iconBtnStyles.label,
+            variant === 'ghost' && iconBtnStyles.labelGhost,
+          ]}
+        >
+          {label}
+        </Text>
+      )}
       <Text style={iconBtnStyles.glyph}>{glyph}</Text>
     </TouchableOpacity>
   )
@@ -147,6 +157,9 @@ const iconBtnStyles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.outlineVariant,
+    flexDirection: 'column',
+    padding: 8,
+    gap: 8,
   },
   danger: { backgroundColor: colors.errorContainer },
   glass: {
@@ -162,5 +175,13 @@ const iconBtnStyles = StyleSheet.create({
     color: colors.onSurface,
     fontFamily: 'Sora_700Bold',
     fontSize: 20,
+  },
+  label: {
+    ...type.labelXs,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
+  },
+  labelGhost: {
+    color: colors.primary,
   },
 })

@@ -59,7 +59,7 @@ const shade = ([l, c, h]: Ok, dL: number): Ok => {
 // variant of one of these bases. Suggested tuning ranges are in the comments.
 
 //                                                     L [range]        C [range]      H [range]
-const _surface = oklch(0.1663, 0.0262, 269.37) // navy surface      L [0.15–0.40]  C [0.04–0.12]  H [240–290]
+const _surface = oklch(0.2636, 0.0689, 268.6) // navy surface      L [0.15–0.40]  C [0.04–0.12]  H [240–290]
 const _variant = oklch(0.8192, 0.0424, 259.6) // secondary text    L [0.65–0.92]  C [0.02–0.08]  H [240–290]
 const _primary = oklch(0.9723, 0.0216, 83.3) // cream foreground  L [0.90–1.00]  C [0.00–0.05]  H [60–100]
 const _cta = oklch(0.3767, 0.1546, 29.2) // maroon CTA        L [0.25–0.55]  C [0.10–0.22]  H [15–45]
