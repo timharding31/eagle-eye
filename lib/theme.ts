@@ -4,49 +4,118 @@ import { Platform, TextStyle } from 'react-native'
 // text and maroon CTA. Designed to read well over satellite imagery in
 // bright outdoor light.
 
+// ─── oklch color engine ──────────────────────────────────────────────────────
+// Standard oklch → oklab → linear-sRGB → sRGB pipeline. Out-of-gamut values
+// soft-clamp, so keep knob values within the sRGB gamut to avoid hue drift.
+
+type Ok = [number, number, number] // [L, C, H°]
+
+const oklch = (l: number, c: number, h: number): Ok => [l, c, h]
+
+function toHex([l, c, h]: Ok): string {
+  const a = c * Math.cos((h * Math.PI) / 180)
+  const b = c * Math.sin((h * Math.PI) / 180)
+  const l_ = l + 0.3963377774 * a + 0.2158037573 * b
+  const m_ = l - 0.1055613458 * a - 0.0638541728 * b
+  const s_ = l - 0.0894841775 * a - 1.291485548 * b
+  const lv = l_ * l_ * l_
+  const mv = m_ * m_ * m_
+  const sv = s_ * s_ * s_
+  const r = 4.076741662 * lv - 3.307711591 * mv + 0.230969929 * sv
+  const g = -1.268438005 * lv + 2.609757401 * mv - 0.341319397 * sv
+  const bv = -0.004196086 * lv - 0.703418615 * mv + 1.707614701 * sv
+  const gamma = (x: number) =>
+    x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055
+  const clamp = (x: number) => Math.max(0, Math.min(1, x))
+  return (
+    '#' +
+    [r, g, bv]
+      .map(x =>
+        Math.round(clamp(gamma(x)) * 255)
+          .toString(16)
+          .padStart(2, '0'),
+      )
+      .join('')
+  )
+}
+
+function toRgba(color: Ok, alpha: number): string {
+  const hex = toHex(color)
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+// Shifts lightness and scales chroma proportionally — preserves the perceived
+// saturation-to-lightness relationship of the base color across the ramp.
+const shade = ([l, c, h]: Ok, dL: number): Ok => {
+  const newL = Math.max(0, Math.min(1, l + dL))
+  return [newL, l > 0 ? (c * newL) / l : c, h]
+}
+
+// ─── palette knobs ────────────────────────────────────────────────────────────
+// Edit these to retheme the app. Every derived color is a shade() or alpha
+// variant of one of these bases. Suggested tuning ranges are in the comments.
+
+//                                                     L [range]        C [range]      H [range]
+const _surface = oklch(0.1663, 0.0262, 269.37) // navy surface      L [0.15–0.40]  C [0.04–0.12]  H [240–290]
+const _variant = oklch(0.8192, 0.0424, 259.6) // secondary text    L [0.65–0.92]  C [0.02–0.08]  H [240–290]
+const _primary = oklch(0.9723, 0.0216, 83.3) // cream foreground  L [0.90–1.00]  C [0.00–0.05]  H [60–100]
+const _cta = oklch(0.3767, 0.1546, 29.2) // maroon CTA        L [0.25–0.55]  C [0.10–0.22]  H [15–45]
+const _eagle = oklch(0.7293, 0.13, 82.9) // golden eagle      L [0.60–0.80]  C [0.10–0.18]  H [65–95]
+// Error uses 3 knobs (Material tone-30/tone-20 have higher chroma than tone-80).
+// Keep all three on the same H to retheme error as a group.
+const _err = oklch(0.8383, 0.0891, 26.8) // error foreground  L [0.65–0.92]  C [0.06–0.15]  H [15–40]
+const _errCont = oklch(0.4171, 0.1702, 27.4) // error container   L [0.25–0.50]  C [0.10–0.22]  H [15–40]
+const _errOn = oklch(0.3275, 0.1336, 27.3) // on-error text     L [0.20–0.40]  C [0.08–0.18]  H [15–40]
+const _lzFill = oklch(0.2549, 0.0885, 256.4) // landing zone fill L [0.15–0.45]  C [0.05–0.15]  H [240–270]
+const _fairway = oklch(0.4021, 0.0831, 165.2) // fairway green     L [0.30–0.55]  C [0.05–0.14]  H [140–180]
+
+// Lightness step between adjacent surface tones — raise for more contrast.
+const _step = 0.038 // [0.02–0.06]
+
 export const colors = {
-  // Tonal surface palette (darkest → brightest)
-  surfaceLowest: '#0a1226',
-  surfaceLow: '#101a36',
-  surface: '#172246',
-  surfaceHigh: '#1d2b56',
-  surfaceBright: '#243466',
-  // Used for drawer-style elevations (slightly darker than base surface)
-  surfaceHighest: '#0c1530',
+  // ── surface tonal ramp — adjust _surface (and _step) to shift the whole bg ──
+  surfaceLowest: toHex(shade(_surface, -2 * _step)), // darkest bg
+  surfaceLow: toHex(shade(_surface, -1 * _step)),
+  surface: toHex(_surface),
+  surfaceHigh: toHex(shade(_surface, +1 * _step)),
+  surfaceHighest: toHex(shade(_surface, -0.059)), // drawer elevation
 
-  // Foreground on dark surfaces
-  primary: '#fdf5e6',
-  onSurface: '#fdf5e6',
-  onSurfaceVariant: '#b4c5e0',
-  onSurfaceMuted: 'rgba(253, 245, 230, 0.62)',
+  // ── foreground ──
+  primary: toHex(_primary),
+  onSurface: toHex(_primary),
+  onSurfaceVariant: toHex(_variant),
+  onSurfaceMuted: toRgba(_primary, 0.62),
 
-  // Maroon CTA
-  secondary: '#800000',
-  secondaryPressed: '#6a0000',
-  onSecondary: '#fdf5e6',
+  // ── CTA ──
+  secondary: toHex(_cta),
+  secondaryPressed: toHex(shade(_cta, -0.048)),
+  onSecondary: toHex(_primary),
 
-  // Borders / dividers
-  outline: '#b4c5e0',
-  outlineVariant: 'rgba(180, 197, 224, 0.25)',
+  // ── borders ──
+  outline: toHex(_variant),
+  outlineVariant: toRgba(_variant, 0.25),
 
-  goldenEagle: '#CF9F37',
+  // ── accent ──
+  goldenEagle: toHex(_eagle),
 
-  // Status
-  error: '#ffb4ab',
-  errorContainer: '#93000a',
-  onError: '#690005',
+  // ── status ──
+  error: toHex(_err),
+  errorContainer: toHex(_errCont),
+  onError: toHex(_errOn),
 
-  // Map overlay accents (kept for visual continuity with map markers)
-  pin: '#fdf5e6',
-  pinFill: '#800000',
-  landingZone: '#fdf5e6',
-  landingZoneFill: '#00214C',
-  fairwayGreen: '#03563D',
+  // ── map overlays ──
+  pin: toHex(_primary),
+  pinFill: toHex(_cta),
+  landingZone: toHex(_primary),
+  landingZoneFill: toHex(_lzFill),
+  fairwayGreen: toHex(_fairway),
 
-  // Translucent glass effects (no backdrop blur on RN — we approximate
-  // with an opaque dark surface at high alpha + a 1px hairline border)
-  glass: 'rgba(12, 21, 48, 0.92)',
-  glassSoft: 'rgba(23, 34, 70, 0.85)',
+  // ── glass effects (opaque dark surface at high alpha + hairline border) ──
+  glass: toRgba(shade(_surface, -0.059), 0.92), // surfaceHighest tint
+  glassSoft: toRgba(_surface, 0.85),
 } as const
 
 export const space = {

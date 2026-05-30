@@ -150,12 +150,13 @@ const iconBtnStyles = StyleSheet.create({
   },
   danger: { backgroundColor: colors.errorContainer },
   glass: {
-    backgroundColor: colors.glassSoft,
-    borderColor: colors.surfaceHighest,
+    backgroundColor: colors.glass,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.outlineVariant,
   },
   ghost: {
     backgroundColor: 'transparent',
-    borderWidth: 0,
+    borderColor: 'transparent',
   },
   glyph: {
     color: colors.onSurface,

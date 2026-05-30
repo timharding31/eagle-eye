@@ -1215,24 +1215,6 @@ const styles = StyleSheet.create({
     right: 0,
   },
 
-  floatBtn: {
-    position: 'absolute',
-    width: 44,
-    height: 44,
-    borderRadius: radius.full,
-    backgroundColor: colors.glassSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.outlineVariant,
-    ...shadows.card,
-  },
-  floatBtnGlyph: {
-    color: colors.primary,
-    fontSize: 20,
-    fontFamily: 'Sora_700Bold',
-  },
-
   iconButtons: {
     position: 'absolute',
     right: 16,
