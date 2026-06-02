@@ -7,6 +7,12 @@ const migrations = {
         tag: '0000_initial_schema',
         breakpoints: true,
       },
+      {
+        idx: 1,
+        when: 1748628000000,
+        tag: '0001_tee_overrides',
+        breakpoints: true,
+      },
     ],
   },
   migrations: {
@@ -46,6 +52,16 @@ CREATE TABLE \`tee_shots\` (
 	\`end_lng\` real,
 	\`distance_m\` real,
 	\`recorded_at\` integer
+);`,
+    m0001: `DROP TABLE \`tee_shots\`;
+--> statement-breakpoint
+CREATE TABLE \`tee_overrides\` (
+	\`course_id\` text NOT NULL,
+	\`hole_num\` integer NOT NULL,
+	\`lat\` real NOT NULL,
+	\`lng\` real NOT NULL,
+	\`set_at\` integer NOT NULL,
+	PRIMARY KEY(\`course_id\`, \`hole_num\`)
 );`,
   },
 }

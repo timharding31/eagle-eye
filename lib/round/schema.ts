@@ -26,14 +26,3 @@ export const holeStates = sqliteTable(
   },
   t => [primaryKey({ columns: [t.roundId, t.holeNum] })],
 )
-
-export const teeShots = sqliteTable('tee_shots', {
-  roundId: text('round_id').notNull(),
-  holeNum: integer('hole_num').notNull(),
-  startLat: real('start_lat').notNull(),
-  startLng: real('start_lng').notNull(),
-  endLat: real('end_lat'),
-  endLng: real('end_lng'),
-  distanceM: real('distance_m'),
-  recordedAt: integer('recorded_at'),
-})

@@ -19,8 +19,15 @@ The putting surface at the end of a Hole. Modeled as a polygon (closed ring of l
 _Avoid_: "putting area," "cup."
 
 **Tee** (or **Tee point**)
-The starting point of a Hole. Modeled as a single point (lat/lng) in MVP. Used for map auto-zoom and the future automatic-tee-shot-start feature.
+The starting point of a Hole. Modeled as a single point (lat/lng). Used for map auto-zoom, the displayed hole distance, and the origin of the Distance from Tee reading. The point that ships in the course data can be corrected per-course — see Tee Correction.
 Multi-tee support (white/blue/red boxes with separate yardages) is deferred — see [ADR-006](docs/adr/0006-tee-box-deferred.md). When added, "Tee" becomes "TeeBox" with a polygon and a label.
+
+**Tee Correction** (the **Set Tee** action)
+A per-course correction to a Hole's Tee point, captured by snapping to the player's current GPS position ("Set Tee"). Course data from OSM is often inaccurate or favors the back tees; this records where the player actually tees off. Persisted in SQLite per-course (survives across Rounds) and layered over the read-only course data inside `loadCourse` — see [ADR-009](docs/adr/0009-tee-override-overlay.md). A single point, not a polygon (distinct from the deferred multi-tee work in ADR-006).
+_Avoid_: "tee box area" (the stored value is a point, not an area).
+
+**Distance from Tee**
+The straight-line distance from the player's current GPS position back to the (possibly corrected) Tee. Shown on the hole screen once the player is meaningfully off the tee (past a small fraction of the Tee→Green line); lateral offset off that line is ignored. A separate reading from the Front/Back/Pin distances, which measure toward the Green.
 
 **Pin**
 The estimated current position of the flagstick on a Green. Defaults to the Green's centroid at the start of each Hole in a Round. Set/moved by the user tapping on the Green polygon in the map view. Persists per-Hole within the active Round only — a new Round resets to centroid (pins move daily).
@@ -36,7 +43,7 @@ The three numbers always shown on the hole screen.
 Computed via `lib/geo`. See [ADR-001](docs/adr/0001-front-back-via-closest-point.md).
 
 **Round**
-A single play session on a Course. Has a `started_at` timestamp, an optional `ended_at` timestamp (null means active), a `current_hole`, and per-hole state (pin position, score, tee shots). At most one Round in the database has `ended_at IS NULL` at any time. See [ADR-002](docs/adr/0002-sqlite-source-of-truth.md).
+A single play session on a Course. Has a `started_at` timestamp, an optional `ended_at` timestamp (null means active), a `current_hole`, and per-hole state (pin position, score). At most one Round in the database has `ended_at IS NULL` at any time. See [ADR-002](docs/adr/0002-sqlite-source-of-truth.md).
 
 **Active Round**
 The single Round currently in progress. The app opens directly into the active Round if one exists. A Round becomes inactive when `endRound()` is called.
@@ -47,11 +54,8 @@ An Active Round whose `started_at` is more than 24 hours old. Surfaces a banner 
 **Hole State**
 Per-hole state within a Round. Holds the user-set pin position for that Hole and the score (entered post-round). One row per (Round, Hole) pair.
 
-**Tee Shot**
-An optional recorded tee shot. Two GPS captures (start at the tee, mark at the ball), distance computed between them. User-initiated with the "Start Tee Shot" button; no automatic capture. May not exist for every Hole — opt-in per shot.
-
 **Landing Zone** (abbreviated LZ in code)
-A pre-shot planning waypoint placed on the map before a Tee Shot. Represents an intended landing spot on the fairway. Par 3 holes have 0 Landing Zones; par 4 holes have 1; par 5 holes have 2. Each Landing Zone anchors a segment in the planning distance chain: Tee → LZ1 → [LZ2 →] Pin. Ephemeral — not persisted to SQLite. Visible only when the player is far enough from the Pin that they have not yet played their Tee Shot (see `LZ_HIDE_WITHIN_M`). Can be overridden with a per-hole toggle.
+A pre-shot planning waypoint placed on the map. Represents an intended landing spot on the fairway. Par 3 holes have 0 Landing Zones; par 4 holes have 1; par 5 holes have 2. Each Landing Zone anchors a segment in the planning distance chain: Tee → LZ1 → [LZ2 →] Pin. Ephemeral — not persisted to SQLite. Shown for par 4/5 Holes; hidden only when the player toggles them off (no automatic distance-based hiding).
 _Avoid_: "waypoint," "lay-up point," "planning point."
 
 **Hazard**

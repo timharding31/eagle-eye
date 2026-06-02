@@ -154,6 +154,17 @@ export function frameForHole(args: {
 }
 
 /**
+ * Ground resolution — metres per screen pixel — for a Web-Mercator zoom
+ * level at the given latitude. Inverse of the zoom formula in
+ * `frameForHole`; use it to turn a pixel span (e.g. the map's on-screen
+ * width) back into metres on the ground.
+ */
+export function metersPerPixel(lat: number, zoom: number): number {
+  const latRad = (lat * Math.PI) / 180
+  return (156543.03392 * Math.cos(latRad)) / Math.pow(2, zoom)
+}
+
+/**
  * Initial Landing Zone positions along the straight tee→green-centroid
  * line. Each entry in `fractions` is a value in `[0, 1]` interpreted as
  * "this far from tee toward green centroid" — e.g. `[1/3, 2/3]` for a par 5
@@ -173,6 +184,27 @@ export function lzInitPositions(
     lat: tee.lat + (greenCentroid.lat - tee.lat) * f,
     lng: tee.lng + (greenCentroid.lng - tee.lng) * f,
   }))
+}
+
+/**
+ * Scalar projection of `p` onto the segment `a→b`, as a fraction of the
+ * segment length: 0 = at `a`, 1 = at `b`, <0 = behind `a`, >1 = past `b`.
+ * Lateral offset is discarded — this answers "how far along the tee→green
+ * line am I", not "how close to the line". Uses a local equirectangular
+ * projection relative to `a` (great-circle deviation is sub-metre at hole
+ * scale). Returns 0 for a degenerate (zero-length) segment.
+ */
+export function projectionFraction(p: LatLng, a: LatLng, b: LatLng): number {
+  const latRad = (a.lat * Math.PI) / 180
+  const mPerLat = 110540
+  const mPerLng = 111320 * Math.cos(latRad)
+  const abx = (b.lng - a.lng) * mPerLng
+  const aby = (b.lat - a.lat) * mPerLat
+  const apx = (p.lng - a.lng) * mPerLng
+  const apy = (p.lat - a.lat) * mPerLat
+  const denom = abx * abx + aby * aby
+  if (denom === 0) return 0
+  return (apx * abx + apy * aby) / denom
 }
 
 /**
@@ -197,4 +229,66 @@ export function bboxOf(points: LatLng[]): BBox {
     if (p.lat > n) n = p.lat
   }
   return [w, s, e, n]
+}
+
+/**
+ * Clamp a point into the hole's Landing-Zone planning envelope, expressed in
+ * the bearing-aligned frame (forward = tee→green-centroid, side = lateral on
+ * screen — the same projection `frameForHole` uses).
+ *
+ * The forward axis is bounded by `points`' forward extent (tee + green ring +
+ * fairway) so an LZ stays between the tee and the green. The side axis is
+ * bounded by ± `sideHalfWidth` metres, centred on the tee→green line — pass
+ * half the visible map width so lateral reach matches the phone screen rather
+ * than the (frequently missing-from-OSM) fairway polygon. A generous `Infinity`
+ * disables the lateral clamp entirely.
+ */
+export function clampToHoleEnvelope(args: {
+  point: LatLng
+  tee: LatLng
+  greenCentroid: LatLng
+  points: LatLng[]
+  sideHalfWidth: number
+}): LatLng {
+  const { point, tee, greenCentroid, points, sideHalfWidth } = args
+  const bearing = bearingDeg(tee, greenCentroid)
+
+  // Local equirectangular projection — metres relative to the tee.
+  const latRad = (tee.lat * Math.PI) / 180
+  const mPerLat = 110540
+  const mPerLng = 111320 * Math.cos(latRad)
+
+  // Rotate by -bearing so "forward" (tee→green) is +y and "side" is +x.
+  const θ = (bearing * Math.PI) / 180
+  const sinθ = Math.sin(θ)
+  const cosθ = Math.cos(θ)
+
+  const project = (p: LatLng) => {
+    const dy = (p.lat - tee.lat) * mPerLat
+    const dx = (p.lng - tee.lng) * mPerLng
+    return {
+      forward: dy * cosθ + dx * sinθ,
+      side: dx * cosθ - dy * sinθ,
+    }
+  }
+
+  let minF = Infinity
+  let maxF = -Infinity
+  for (const p of points) {
+    const f = project(p).forward
+    if (f < minF) minF = f
+    if (f > maxF) maxF = f
+  }
+
+  const { forward, side } = project(point)
+  const clampedForward = Math.max(minF, Math.min(maxF, forward))
+  const clampedSide = Math.max(-sideHalfWidth, Math.min(sideHalfWidth, side))
+
+  // Un-rotate back to north/east metres, then to lat/lng.
+  const dy = clampedForward * cosθ - clampedSide * sinθ
+  const dx = clampedForward * sinθ + clampedSide * cosθ
+  return {
+    lat: tee.lat + dy / mPerLat,
+    lng: tee.lng + dx / mPerLng,
+  }
 }

@@ -3,7 +3,6 @@ import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm'
 import { create } from 'zustand'
 
 import { db } from '@/db'
-import { _resetForActiveRoundChange as resetShots } from '@/lib/shots'
 import { holeStates, rounds } from './schema'
 
 export type Round = InferSelectModel<typeof rounds>
@@ -89,7 +88,6 @@ export async function startRound(courseId: string): Promise<Round> {
   }
   await db.insert(rounds).values(round)
   store.setState({ activeRound: round, states: {} })
-  resetShots()
   return round
 }
 
@@ -111,7 +109,6 @@ export async function endRound(
   if (store.getState().activeRound?.id === roundId) {
     store.setState({ activeRound: null, states: {} })
   }
-  resetShots()
 }
 
 export async function setPin(

@@ -16,7 +16,6 @@ import {
 import { db } from '@/db'
 import migrations from '@/db/migrations'
 import { ensureHydrated } from '@/lib/round'
-import { ensureHydrated as ensureShotsHydrated } from '@/lib/shots'
 import { colors, type } from '@/lib/theme'
 
 export default function RootLayout() {
@@ -31,9 +30,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (success) {
-      ensureHydrated()
-        .then(() => ensureShotsHydrated())
-        .catch(e => console.error('hydrate failed', e))
+      ensureHydrated().catch(e => console.error('hydrate failed', e))
     }
   }, [success])
 

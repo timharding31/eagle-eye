@@ -1,4 +1,11 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { LayoutChangeEvent, NativeSyntheticEvent } from 'react-native'
 import {
   View,
@@ -17,7 +24,6 @@ import {
   GeoJSONSource,
   Layer,
   Marker,
-  UserLocation,
   type CameraRef,
   type PressEvent,
   type PressEventWithFeatures,
@@ -25,17 +31,18 @@ import {
 import * as Location from 'expo-location'
 
 import { IconAction, TopBar } from '@/components/TopBar'
-import { Hole, loadCourse, type Course } from '@/lib/course'
-import type { BBox } from '@/lib/course/types'
+import { Hole, loadCourse, setTeeOverride, type Course } from '@/lib/course'
 import {
-  bboxOf,
+  clampToHoleEnvelope,
   distanceMeters,
   nearestPointOnPolygon,
   farthestPointOnPolygon,
   centroid,
   frameForHole,
   lzInitPositions,
+  metersPerPixel,
   pointInPolygon,
+  projectionFraction,
   type LatLng,
 } from '@/lib/geo'
 import {
@@ -46,14 +53,6 @@ import {
   useHoleState,
   useIsHydrated,
 } from '@/lib/round'
-import {
-  cancelTeeShot,
-  CompletedTeeShot,
-  markTeeShot,
-  startTeeShot,
-  useCurrentTeeShot,
-  useTeeShotForHole,
-} from '@/lib/shots'
 import { colors, fonts, radius, shadows, space, type } from '@/lib/theme'
 import {
   satelliteStyle,
@@ -65,22 +64,20 @@ import { IconButton } from '@/components/Button'
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  CircleCheckIcon,
   CrosshairIcon,
   FlagIcon,
   FullscreenIcon,
   GoalIcon,
+  GolfTeeIcon,
   LandPlotIcon,
 } from '@/components/icons'
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   HomeIcon,
-  XIcon,
 } from 'lucide-react-native'
 
 const M_TO_YD = 1.0936133
-const YD_TO_M = 1 / M_TO_YD
 
 // Knobs for per-hole camera framing.
 // The map fills the whole screen; the TopBar and bottom drawer overlay
@@ -107,31 +104,25 @@ const FRAME_ZOOM_ADJUST = 0
 const GREEN_ZOOM_ADJUST = -1
 
 // Knobs for Landing Zone planning waypoints (par 4 / par 5 only).
-// LZ_HIDE_WITHIN_M: when the player is closer than this to the pin, LZs
-//   auto-hide (presumed past the tee shot). Tune if LZs hide too early on
-//   short par 4s — useful range roughly 200–350 yd in metres.
 // LZ_INIT_FRACTIONS: fractions along the tee→green-centroid line at which
 //   each LZ initially sits. Par 4: one LZ at 2/3 (drive 2/3, approach 1/3).
 //   Par 5: two LZs at 4/9 and 7/9 (drive 4/9, layup 1/3, approach 2/9).
 //   Tune to taste — bias toward 1 to move waypoints closer to the green.
-const LZ_HIDE_WITHIN_M = 300 * YD_TO_M
 const LZ_INIT_FRACTIONS: Record<number, readonly number[]> = {
   4: [2 / 3],
   5: [4 / 9, 7 / 9],
 }
 
-type LzToggle = 'auto' | 'force-shown' | 'force-hidden'
+// Distance-from-tee marker shows once the player is meaningfully off the
+// tee — i.e. past this fraction of the tee→green-centroid line. Below it
+// the value is just GPS noise reading "0". No upper bound: the marker
+// stays visible even past the green.
+const TEE_MARKER_MIN_FRACTION = 0.02
+
 type CameraMode = 'hole' | 'green'
 
 function lzFractionsFor(par: number): readonly number[] {
   return LZ_INIT_FRACTIONS[par] ?? []
-}
-
-function clampToBBox(p: LatLng, bbox: BBox): LatLng {
-  return {
-    lat: Math.max(bbox[1], Math.min(bbox[3], p.lat)),
-    lng: Math.max(bbox[0], Math.min(bbox[2], p.lng)),
-  }
 }
 
 export default function HoleScreen() {
@@ -175,6 +166,19 @@ export default function HoleScreen() {
       })
     return () => {
       cancelled = true
+    }
+  }, [round])
+
+  // Re-load the course after a tee correction so the overridden tee
+  // (applied inside loadCourse) propagates to distances/framing. Cheap
+  // enough to just re-read; keeps the loaded Course the single source of
+  // truth rather than patching the tee locally.
+  const reloadCourse = useCallback(async () => {
+    if (!round) return
+    try {
+      setCourse(await loadCourse(round.courseId))
+    } catch (e) {
+      console.error('reloadCourse failed', e)
     }
   }, [round])
 
@@ -241,6 +245,7 @@ export default function HoleScreen() {
       round={round}
       holeNum={holeNum}
       locationGranted={locationGranted}
+      reloadCourse={reloadCourse}
     />
   )
 }
@@ -263,6 +268,7 @@ interface FramedHoleScreenProps {
   round: Round
   holeNum: number
   locationGranted: boolean | null
+  reloadCourse: () => Promise<void>
 }
 
 function FramedHoleScreen({
@@ -275,6 +281,7 @@ function FramedHoleScreen({
   mapLayer,
   holeNum,
   locationGranted,
+  reloadCourse,
 }: FramedHoleScreenProps) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -330,7 +337,7 @@ function FramedHoleScreen({
   const [lzPositions, setLzPositions] = useState<LatLng[]>(() =>
     lzInitPositions(teeLL, greenC, lzFractionsFor(currentHole.par)),
   )
-  const [lzToggle, setLzToggle] = useState<LzToggle>('auto')
+  const [lzShown, setLzShown] = useState(true)
   const [cameraMode, setCameraMode] = useState<CameraMode>('hole')
   // Reset per-hole state when navigating to a new hole. Using the in-render
   // compare pattern (vs. useEffect) so the next render already has fresh
@@ -341,16 +348,24 @@ function FramedHoleScreen({
     setLzPositions(
       lzInitPositions(teeLL, greenC, lzFractionsFor(currentHole.par)),
     )
-    setLzToggle('auto')
+    setLzShown(true)
     setCameraMode('hole')
   }
 
-  const lzVisible =
-    currentHole.par >= 4 &&
-    (lzToggle === 'force-shown' ||
-      (lzToggle !== 'force-hidden' &&
-        (position === null ||
-          distanceMeters(position, pin) >= LZ_HIDE_WITHIN_M)))
+  // LZs show for par 4/5 unless the player toggles them off. No automatic
+  // distance-based hiding — it read as clunky on-course.
+  const lzVisible = currentHole.par >= 4 && lzShown
+
+  // Distance from the (possibly corrected) tee, shown once the player is
+  // off the tee. Straight-line GPS→tee; lateral offset is ignored — the
+  // projection fraction is only the visibility gate.
+  const teeFraction = position
+    ? projectionFraction(position, teeLL, greenC)
+    : null
+  const teeDistanceM =
+    teeFraction != null && teeFraction > TEE_MARKER_MIN_FRACTION
+      ? distanceMeters(position!, teeLL)
+      : null
 
   const prevHole = course.holes.find(h => h.num === holeNum - 1)
   const nextHole = course.holes.find(h => h.num === holeNum + 1)
@@ -358,52 +373,20 @@ function FramedHoleScreen({
   const isLastHole = holeNum === lastHoleNum
   const canAdvance = !!nextHole || isLastHole
 
-  const inFlight = useCurrentTeeShot()
-  const completedShot = useTeeShotForHole(holeNum)
-  const inFlightHere =
-    inFlight?.holeNum === holeNum && inFlight?.roundId === round.id
-  // Dismiss is keyed by hole so navigating away and back re-shows the prompt
-  // without a useEffect that resets state on holeNum change.
-  const [dismissedHoleNum, setDismissedHoleNum] = useState<number | null>(null)
-  const shotDismissed = dismissedHoleNum === holeNum
-  const [shotBusy, setShotBusy] = useState(false)
-  const shotMode: 'idle' | 'in-flight' | 'done' | 'dismissed' = inFlightHere
-    ? 'in-flight'
-    : completedShot
-      ? 'done'
-      : shotDismissed
-        ? 'dismissed'
-        : 'idle'
-
-  const handleStartShot = async () => {
-    if (shotBusy) return
-    setShotBusy(true)
+  // Snap the corrected tee to the live GPS fix and re-load the course so
+  // every downstream consumer sees the new tee. Silent overwrite on
+  // re-tap; disabled (below) when there's no fix to snap to.
+  const [teeBusy, setTeeBusy] = useState(false)
+  const handleSetTee = async () => {
+    if (!position || teeBusy) return
+    setTeeBusy(true)
     try {
-      await startTeeShot(round.id, holeNum)
+      await setTeeOverride(round.courseId, holeNum, position)
+      await reloadCourse()
     } catch (e) {
-      console.error('startTeeShot failed', e)
+      console.error('setTeeOverride failed', e)
     } finally {
-      setShotBusy(false)
-    }
-  }
-
-  const handleMarkShot = async () => {
-    if (shotBusy) return
-    setShotBusy(true)
-    try {
-      await markTeeShot()
-    } catch (e) {
-      console.error('markTeeShot failed', e)
-    } finally {
-      setShotBusy(false)
-    }
-  }
-
-  const handleCancelShot = async () => {
-    try {
-      await cancelTeeShot()
-    } catch (e) {
-      console.error('cancelTeeShot failed', e)
+      setTeeBusy(false)
     }
   }
 
@@ -424,7 +407,6 @@ function FramedHoleScreen({
       framePoints.push({ lat, lng })
     }
   }
-  const holeBbox = bboxOf(framePoints)
   const framePadding = {
     top: insets.top + TOPBAR_CHROME,
     bottom: insets.bottom + DRAWER_CHROME,
@@ -480,17 +462,15 @@ function FramedHoleScreen({
     },
   )
 
+  // Re-frame only on the events that should move the camera: map ready,
+  // hole change, camera-mode toggle, and first/changed layout. Deliberately
+  // NOT keyed on frame values — a tee correction shifts the frame center but
+  // must not yank the camera (the corrected tee marker just slides over).
   useEffect(() => {
     if (!isMapReady) return
     onFrameChange(frame)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    isMapReady,
-    frame?.center.lat,
-    frame?.center.lng,
-    frame?.zoom,
-    frame?.bearing,
-  ])
+  }, [isMapReady, holeNum, cameraMode, mapSize?.width, mapSize?.height])
 
   const handleToggleCameraMode = () => {
     setCameraMode(prev => (prev === 'green' ? 'hole' : 'green'))
@@ -527,8 +507,9 @@ function FramedHoleScreen({
     }
 
     // Hole-frame mode: tap moves the nearest visible Landing Zone.
-    // LZs get clamped to the hole's framing envelope so they can't escape
-    // the visible area. Par 3s (no LZs) intentionally swallow taps here —
+    // LZs get clamped to the hole's planning envelope (forward bounded by
+    // tee→green, laterally by the screen width) so they can't escape the
+    // visible area. Par 3s (no LZs) intentionally swallow taps here —
     // the user has to enter zoom-to-green to touch the pin.
     if (lzVisible && lzPositions.length > 0) {
       let bestIdx = 0
@@ -540,13 +521,26 @@ function FramedHoleScreen({
           bestIdx = i
         }
       }
-      const clamped = clampToBBox(tap, holeBbox)
+      // Lateral reach spans the full visible map width — not the hole's
+      // polygons — so an LZ can be dragged into doglegs even when OSM gives
+      // us no fairway. Forward stays bounded between tee and green.
+      const sideHalfWidth =
+        mapSize && holeFrame
+          ? (mapSize.width / 2) * metersPerPixel(teeLL.lat, holeFrame.zoom)
+          : Infinity
+      const clamped = clampToHoleEnvelope({
+        point: tap,
+        tee: teeLL,
+        greenCentroid: greenC,
+        points: framePoints,
+        sideHalfWidth,
+      })
       setLzPositions(prev => prev.map((p, i) => (i === bestIdx ? clamped : p)))
     }
   }
 
   const handleToggleLz = () => {
-    setLzToggle(prev => (prev === 'auto' ? 'force-hidden' : 'auto'))
+    setLzShown(prev => !prev)
   }
 
   type LzSegment = {
@@ -601,7 +595,6 @@ function FramedHoleScreen({
               : undefined
           }
         />
-        <UserLocation />
 
         <GeoJSONSource id="green-src" data={currentHole.green}>
           <Layer
@@ -694,23 +687,35 @@ function FramedHoleScreen({
 
         {lzVisible &&
           lzPositions.map((lz, i) => (
-            <GeoJSONSource
-              key={`lz-dot-src-${i}`}
-              id={`lz-dot-src-${i}`}
-              data={{ type: 'Point', coordinates: [lz.lng, lz.lat] }}
+            <Marker
+              key={`lz-dot-${i}`}
+              id={`lz-dot-${i}`}
+              lngLat={[lz.lng, lz.lat]}
+              anchor="center"
             >
-              <Layer
-                id={`lz-dot-${i}`}
-                type="circle"
-                paint={{
-                  'circle-radius': 8,
-                  'circle-color': colors.landingZoneFill,
-                  'circle-stroke-color': colors.primary,
-                  'circle-stroke-width': 2,
-                }}
-              />
-            </GeoJSONSource>
+              <View style={styles.lzMarker} pointerEvents="none">
+                <View style={styles.lzRing} />
+                <CrosshairIcon
+                  width={32}
+                  height={32}
+                  color={colors.landingZoneFill}
+                />
+              </View>
+            </Marker>
           ))}
+
+        {position && (
+          <Marker
+            id="me-marker"
+            lngLat={[position.lng, position.lat]}
+            anchor="center"
+          >
+            <View style={styles.meMarker} pointerEvents="none">
+              <View style={styles.meHalo} />
+              <View style={styles.meDiamond} />
+            </View>
+          </Marker>
+        )}
       </Map>
 
       <TopBar
@@ -729,18 +734,22 @@ function FramedHoleScreen({
         style={styles.topBarOverlay}
       />
 
-      <FpbPanel distances={distances} top={floatingTop} />
+      <View
+        style={[styles.rightStack, { top: floatingTop }]}
+        pointerEvents="none"
+      >
+        <FpbPanel distances={distances} />
+        {teeDistanceM != null && <TeeDistancePanel meters={teeDistanceM} />}
+      </View>
 
       <View style={[styles.iconButtons, { bottom: floatingBottom }]}>
-        <ShotFloatingRow
-          mode={shotMode}
-          busy={shotBusy}
-          onStart={handleStartShot}
-          onMark={handleMarkShot}
-          onCancel={handleCancelShot}
-          onDismiss={() => setDismissedHoleNum(holeNum)}
-          onUndismiss={() => setDismissedHoleNum(null)}
-          completedShot={completedShot}
+        <IconButton
+          glyph={<GolfTeeIcon width={48} height={48} color={colors.primary} />}
+          onPress={handleSetTee}
+          label="Set Tee"
+          size={80}
+          variant="glass"
+          disabled={!position || teeBusy}
         />
 
         <IconButton
@@ -763,13 +772,11 @@ function FramedHoleScreen({
               <LandPlotIcon
                 width={48}
                 height={48}
-                color={
-                  lzToggle === 'auto' ? colors.onSurface : colors.surfaceHigh
-                }
+                color={lzShown ? colors.onSurface : colors.surfaceHigh}
               />
             }
             onPress={handleToggleLz}
-            label={`LZ${lzToggle === 'auto' ? '' : ': OFF'}`}
+            label={`LZ${lzShown ? '' : ': OFF'}`}
             size={80}
             variant="glass"
           />
@@ -997,118 +1004,30 @@ function HoleGrid({
   )
 }
 
-function ShotFloatingRow({
-  mode,
-  completedShot,
-  busy,
-  onStart,
-  onMark,
-  onCancel,
-  onDismiss,
-  onUndismiss,
-}: {
-  mode: 'idle' | 'in-flight' | 'done' | 'dismissed'
-  busy: boolean
-  onStart: () => void
-  onMark: () => void
-  onCancel: () => void
-  onDismiss: () => void
-  onUndismiss: () => void
-  completedShot?: CompletedTeeShot
-}) {
-  const showX = mode === 'in-flight'
-
-  const [pulseAnim] = useState(() => new Animated.Value(1))
-  useEffect(() => {
-    if (mode !== 'in-flight') {
-      pulseAnim.setValue(1)
-      return
-    }
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 0.35,
-          duration: 1250,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1250,
-          useNativeDriver: true,
-        }),
-      ]),
-    )
-    anim.start()
-    return () => anim.stop()
-  }, [mode, pulseAnim])
-
-  let icon: React.ReactElement
-  let label: string
-  let onPress: () => void
-
-  if (mode === 'in-flight') {
-    icon = (
-      <Animated.View style={{ opacity: pulseAnim }}>
-        <CrosshairIcon width={48} height={48} color={colors.primary} />
-      </Animated.View>
-    )
-    label = 'Mark'
-    onPress = onMark
-  } else if (mode === 'done') {
-    icon = <CircleCheckIcon width={48} height={48} color={colors.primary} />
-    label = completedShot
-      ? `${fmtYds(Math.round(completedShot.distanceM * YD_TO_M))}YD`
-      : 'Restart'
-    onPress = onStart
-  } else if (mode === 'dismissed') {
-    icon = (
-      <CrosshairIcon width={48} height={48} color={colors.onSurfaceVariant} />
-    )
-    label = 'Record'
-    onPress = onUndismiss
-  } else {
-    icon = <CrosshairIcon width={48} height={48} color={colors.primary} />
-    label = 'Track'
-    onPress = onStart
-  }
-
-  return (
-    <View style={styles.shotFloatingRow}>
-      {showX ? (
-        <IconButton
-          glyph={<XIcon width={48} height={48} color={colors.onError} />}
-          onPress={mode === 'in-flight' ? onCancel : onDismiss}
-          label="Cancel"
-          size={80}
-          variant="ghost"
-        />
-      ) : null}
-      <IconButton
-        glyph={icon}
-        onPress={onPress}
-        label={label}
-        size={80}
-        disabled={busy}
-        variant="glass"
-      />
-    </View>
-  )
-}
-
 function FpbPanel({
   distances,
-  top,
 }: {
   distances: { front: number; pin: number; back: number } | null
-  top: number
 }) {
   return (
-    <View style={[fpb.panel, { top }]} pointerEvents="none">
+    <View style={fpb.panel} pointerEvents="none">
       <FpbCell value={distances?.back} back />
       <View style={fpb.divider} />
       <FpbCell value={distances?.pin} primary />
       <View style={fpb.divider} />
       <FpbCell value={distances?.front} front />
+    </View>
+  )
+}
+
+// Distance from the (corrected) tee. A sibling of the FPB pill — same glass
+// styling, stacked just below it — but a different reference point, so it's
+// its own panel rather than a fourth FPB cell.
+function TeeDistancePanel({ meters }: { meters: number }) {
+  return (
+    <View style={[fpb.panel, teePanel.panel]}>
+      <Text style={teePanel.label}>TEE</Text>
+      <Text style={teePanel.value}>{fmtYds(Math.round(meters * M_TO_YD))}</Text>
     </View>
   )
 }
@@ -1322,10 +1241,57 @@ const styles = StyleSheet.create({
   },
   centerMsgText: { ...type.bodyMd, textAlign: 'center' },
 
-  shotFloatingRow: {
-    flexDirection: 'row',
+  // Top-right stack: the FPB pill with the tee-distance pill below it.
+  // Right-aligned so the narrower tee pill hugs the same edge.
+  rightStack: {
+    position: 'absolute',
+    right: space.sm,
+    alignItems: 'flex-end',
+    gap: space.sm,
+  },
+
+  // GPS position: a static golden diamond (rotated square) with a faint
+  // golden halo — visually distinct from the tee dot (circle), LZ
+  // crosshairs, and the pin flag.
+  meMarker: {
+    width: 30,
+    height: 30,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+  },
+  meHalo: {
+    position: 'absolute',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.goldenEagle,
+    opacity: 0.25,
+  },
+  meDiamond: {
+    width: 15,
+    height: 15,
+    backgroundColor: colors.goldenEagle,
+    borderWidth: 1.5,
+    borderColor: colors.surfaceHighest,
+    transform: [{ rotate: '45deg' }],
+  },
+
+  // Landing Zone: navy crosshair glyph with a faint cream ring tucked just
+  // inside its outer circle, for contrast against the green grass it sits on.
+  lzMarker: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lzRing: {
+    position: 'absolute',
+    width: 21,
+    height: 21,
+    borderRadius: 10.5,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    opacity: 0.55,
   },
 })
 
@@ -1420,8 +1386,6 @@ const drawer = StyleSheet.create({
 
 const fpb = StyleSheet.create({
   panel: {
-    position: 'absolute',
-    right: space.sm,
     backgroundColor: colors.glass,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1461,6 +1425,27 @@ const fpb = StyleSheet.create({
     fontSize: 34,
     lineHeight: 38,
     letterSpacing: -0.5,
+  },
+})
+
+const teePanel = StyleSheet.create({
+  panel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  label: {
+    ...type.labelXs,
+    color: colors.primary,
+    fontSize: 11,
+    letterSpacing: 1.6,
+  },
+  value: {
+    color: colors.primary,
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 22,
+    lineHeight: 26,
+    fontVariant: ['tabular-nums'],
   },
 })
 

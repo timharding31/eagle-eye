@@ -9,7 +9,7 @@ import lincolnParkCourse from '@/courses/lincoln-park.json'
 import peacockGapCourse from '@/courses/peacock-gap.json'
 
 import { normalize, type OsmResult } from './normalize'
-import { courses as coursesTable } from './schema'
+import { courses as coursesTable, teeOverrides } from './schema'
 import type { BBox, Course, GeoPolygon, MissingHole, Position } from './types'
 
 export type {
@@ -72,10 +72,73 @@ export async function loadInstalledCourse(id: string): Promise<Course> {
   return JSON.parse(row.rawDataBlob) as Course
 }
 
-/** Load a Course by its slug from either the bundled registry or SQLite. */
+/**
+ * Load a Course by its slug from either the bundled registry or SQLite,
+ * with any per-course tee corrections layered on top (see
+ * `setTeeOverride`). The overlay is the reason callers should always go
+ * through `loadCourse` rather than `loadBundledCourse`/`loadInstalledCourse`
+ * directly — those return the raw, un-corrected data.
+ */
 export async function loadCourse(slug: string): Promise<Course> {
-  if (slug in BUNDLED_REGISTRY) return loadBundledCourse(slug)
-  return loadInstalledCourse(slug)
+  const base =
+    slug in BUNDLED_REGISTRY
+      ? await loadBundledCourse(slug)
+      : await loadInstalledCourse(slug)
+  return applyTeeOverrides(slug, base)
+}
+
+/**
+ * Record (or replace) a corrected tee position for one hole of a course.
+ * Persisted per-course so it survives across rounds. Idempotent — the PK
+ * is (course_id, hole_num), so re-setting overwrites. `courseId` is the
+ * slug stored on `rounds.course_id`.
+ */
+export async function setTeeOverride(
+  courseId: string,
+  holeNum: number,
+  pos: { lat: number; lng: number },
+): Promise<void> {
+  const row = {
+    courseId,
+    holeNum,
+    lat: pos.lat,
+    lng: pos.lng,
+    setAt: Date.now(),
+  }
+  await db
+    .insert(teeOverrides)
+    .values(row)
+    .onConflictDoUpdate({
+      target: [teeOverrides.courseId, teeOverrides.holeNum],
+      set: { lat: row.lat, lng: row.lng, setAt: row.setAt },
+    })
+}
+
+/**
+ * Return a copy of `course` with any stored tee overrides applied. When no
+ * overrides exist the original reference is returned unchanged (so the
+ * bundled-registry object is never mutated); otherwise only the corrected
+ * holes are cloned.
+ */
+async function applyTeeOverrides(
+  courseId: string,
+  course: Course,
+): Promise<Course> {
+  const rows = await db
+    .select()
+    .from(teeOverrides)
+    .where(eq(teeOverrides.courseId, courseId))
+  if (rows.length === 0) return course
+  const byHole = new Map(rows.map(r => [r.holeNum, r]))
+  const holes = course.holes.map(h => {
+    const o = byHole.get(h.num)
+    if (!o) return h
+    return {
+      ...h,
+      tee: { type: 'Point' as const, coordinates: [o.lng, o.lat] as Position },
+    }
+  })
+  return { ...course, holes }
 }
 
 export async function listInstalledCourses(): Promise<CourseSummary[]> {
