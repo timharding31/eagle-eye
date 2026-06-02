@@ -135,16 +135,7 @@ export function IconButton({
         disabled && styles.disabled,
       ]}
     >
-      {label && (
-        <Text
-          style={[
-            iconBtnStyles.label,
-            variant === 'ghost' && iconBtnStyles.labelGhost,
-          ]}
-        >
-          {label}
-        </Text>
-      )}
+      {label && <Text style={[iconBtnStyles.label]}>{label}</Text>}
       <Text style={iconBtnStyles.glyph}>{glyph}</Text>
     </TouchableOpacity>
   )
@@ -182,10 +173,7 @@ const iconBtnStyles = StyleSheet.create({
   },
   label: {
     ...type.labelXs,
-    color: colors.onSurfaceVariant,
-    textAlign: 'center',
-  },
-  labelGhost: {
     color: colors.primary,
+    textAlign: 'center',
   },
 })
