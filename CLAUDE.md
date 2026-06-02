@@ -10,7 +10,7 @@ Read these two files before doing any non-trivial work — they are load-bearing
 
 - `CONTEXT.md` — the domain glossary. Use these terms **exactly** in code and docs (Course, Hole, Green, Pin, Round, Tee Shot, etc.). The "Terms to avoid" list there is enforced (no "yardage", "tracker", "user", "API"). Add a term to this file before naming a new domain concept in code.
 - `docs/PLANNING.md` — the phasing plan, tech-stack rationale, module table, data model, and UX flows. The module table is the source of truth for which file owns which capability.
-- `docs/adr/` — eight ADRs that lock in non-obvious decisions (front/back via closest point, SQLite as source of truth, source-agnostic course data, manual hole nav, MapLibre offline packs, tee-box deferred, Find Nearby only, prefetch both tile layers). Check these before changing related behavior.
+- `docs/adr/` — nine ADRs that lock in non-obvious decisions (front/back via closest point, SQLite as source of truth, source-agnostic course data, manual hole nav, MapLibre offline packs, tee-box deferred, Find Nearby only, prefetch both tile layers, tee-correction overlay). Check these before changing related behavior.
 
 ## Commands
 
