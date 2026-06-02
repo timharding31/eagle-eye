@@ -69,6 +69,9 @@ import {
   FullscreenIcon,
   GoalIcon,
   GolfTeeIcon,
+  GolfTeeIcon2,
+  GreenBackIcon,
+  GreenFrontIcon,
   LandPlotIcon,
 } from '@/components/icons'
 import {
@@ -119,10 +122,28 @@ const LZ_INIT_FRACTIONS: Record<number, readonly number[]> = {
 // stays visible even past the green.
 const TEE_MARKER_MIN_FRACTION = 0.02
 
+// Gap (in screen px) left between a Landing Zone marker and the dashed
+// planning segments meeting it, so the line doesn't run through the
+// crosshair's hollow center. Converted to metres at the active frame zoom.
+const LZ_LINE_GAP_PX = 7
+
 type CameraMode = 'hole' | 'green'
 
 function lzFractionsFor(par: number): readonly number[] {
   return LZ_INIT_FRACTIONS[par] ?? []
+}
+
+// Move `from` toward `to` by `gapM` metres, returning the shortened endpoint.
+// Linear interpolation in lat/lng — exact enough at the few-metre scale of an
+// LZ marker gap. Returns `from` unchanged if the gap would consume the segment.
+function trimTowards(from: LatLng, to: LatLng, gapM: number): LatLng {
+  const segM = distanceMeters(from, to)
+  if (gapM <= 0 || segM <= gapM) return from
+  const f = gapM / segM
+  return {
+    lat: from.lat + (to.lat - from.lat) * f,
+    lng: from.lng + (to.lng - from.lng) * f,
+  }
 }
 
 export default function HoleScreen() {
@@ -546,18 +567,30 @@ function FramedHoleScreen({
   type LzSegment = {
     from: LatLng
     to: LatLng
+    drawFrom: LatLng
+    drawTo: LatLng
     distanceM: number
     midpoint: LatLng
   }
   const lzSegments: LzSegment[] = []
   if (lzVisible) {
     const chain: LatLng[] = [teeLL, ...lzPositions, pin]
+    // Leave a gap where a segment meets an LZ crosshair (chain indices
+    // 1..lzPositions.length) so the dashed line stops short of the marker's
+    // hollow center. Tee (index 0) and pin (last) get no gap.
+    const gapM =
+      frame && mapSize
+        ? LZ_LINE_GAP_PX * metersPerPixel(teeLL.lat, frame.zoom)
+        : 0
+    const isLzNode = (idx: number) => idx >= 1 && idx <= lzPositions.length
     for (let i = 0; i < chain.length - 1; i++) {
       const from = chain[i]
       const to = chain[i + 1]
       lzSegments.push({
         from,
         to,
+        drawFrom: isLzNode(i) ? trimTowards(from, to, gapM) : from,
+        drawTo: isLzNode(i + 1) ? trimTowards(to, from, gapM) : to,
         distanceM: distanceMeters(from, to),
         midpoint: {
           lat: (from.lat + to.lat) / 2,
@@ -625,8 +658,8 @@ function FramedHoleScreen({
             data={{
               type: 'LineString',
               coordinates: [
-                [seg.from.lng, seg.from.lat],
-                [seg.to.lng, seg.to.lat],
+                [seg.drawFrom.lng, seg.drawFrom.lat],
+                [seg.drawTo.lng, seg.drawTo.lat],
               ],
             }}
           >
@@ -634,7 +667,7 @@ function FramedHoleScreen({
               id={`lz-seg-${i}`}
               type="line"
               paint={{
-                'line-color': colors.primary,
+                'line-color': colors.surface,
                 'line-width': 2,
                 'line-dasharray': [2, 2],
                 'line-opacity': 0.85,
@@ -742,26 +775,32 @@ function FramedHoleScreen({
         {teeDistanceM != null && <TeeDistancePanel meters={teeDistanceM} />}
       </View>
 
-      <View style={[styles.iconButtons, { bottom: floatingBottom }]}>
-        <IconButton
-          glyph={<GolfTeeIcon width={48} height={48} color={colors.primary} />}
-          onPress={handleSetTee}
-          label="Set Tee"
-          size={80}
-          variant="glass"
-          disabled={!position || teeBusy}
-        />
+      <View style={[styles.iconButtons, { bottom: floatingBottom + 48 }]}>
+        {cameraMode === 'hole' ? (
+          <IconButton
+            glyph={
+              <GolfTeeIcon width={48} height={48} color={colors.primary} />
+            }
+            onPress={handleSetTee}
+            label="Set Tee"
+            size={80}
+            variant="glass"
+            disabled={!position || teeBusy}
+          />
+        ) : (
+          <View style={{ minHeight: 84 }} />
+        )}
 
         <IconButton
           glyph={
             cameraMode === 'green' ? (
-              <FullscreenIcon width={48} height={48} color={colors.primary} />
+              <LandPlotIcon width={48} height={48} color={colors.primary} />
             ) : (
               <GoalIcon width={48} height={48} color={colors.primary} />
             )
           }
           onPress={handleToggleCameraMode}
-          label={cameraMode === 'green' ? 'Hole' : 'Green'}
+          label={cameraMode === 'green' ? 'To Hole' : 'To Green'}
           size={80}
           variant="glass"
         />
@@ -769,14 +808,14 @@ function FramedHoleScreen({
         {currentHole.par >= 4 && cameraMode === 'hole' && (
           <IconButton
             glyph={
-              <LandPlotIcon
+              <CrosshairIcon
                 width={48}
                 height={48}
-                color={lzShown ? colors.onSurface : colors.surfaceHigh}
+                color={lzShown ? colors.onSurface : colors.onSurfaceVariant}
               />
             }
             onPress={handleToggleLz}
-            label={`LZ${lzShown ? '' : ': OFF'}`}
+            label={`LZ${lzShown ? ': ON' : ': OFF'}`}
             size={80}
             variant="glass"
           />
@@ -907,7 +946,7 @@ function BottomDrawer({
           glyph={
             <View style={{ paddingTop: 4 }}>
               <ChevronLeftIcon
-                color={colors.onSurfaceVariant}
+                color={colors.onSurface}
                 width={32}
                 height={32}
               />
@@ -934,7 +973,7 @@ function BottomDrawer({
           glyph={
             <View style={{ paddingTop: 4 }}>
               <ChevronRightIcon
-                color={colors.onSurfaceVariant}
+                color={colors.onSurface}
                 width={32}
                 height={32}
               />
@@ -1026,7 +1065,7 @@ function FpbPanel({
 function TeeDistancePanel({ meters }: { meters: number }) {
   return (
     <View style={[fpb.panel, teePanel.panel]}>
-      <Text style={teePanel.label}>TEE</Text>
+      <GolfTeeIcon width={24} height={24} color={colors.onSurfaceVariant} />
       <Text style={teePanel.value}>{fmtYds(Math.round(meters * M_TO_YD))}</Text>
     </View>
   )
@@ -1064,9 +1103,17 @@ function FpbCell({
             }}
           >
             {front ? (
-              <ChevronDownIcon width={24} height={24} color={colors.primary} />
+              <GreenFrontIcon
+                width={24}
+                height={24}
+                color={colors.onSurfaceVariant}
+              />
             ) : (
-              <ChevronUpIcon width={24} height={24} color={colors.primary} />
+              <GreenBackIcon
+                width={24}
+                height={24}
+                color={colors.onSurfaceVariant}
+              />
             )}
           </Text>
         )}
@@ -1156,7 +1203,7 @@ const styles = StyleSheet.create({
 
   iconButtons: {
     position: 'absolute',
-    right: 16,
+    right: space.lg,
     display: 'flex',
     flexDirection: 'column-reverse',
     alignItems: 'flex-end',
@@ -1228,7 +1275,9 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontFamily: fonts.data,
     fontSize: 12,
-    letterSpacing: 0.5,
+    // letterSpacing: 0.5,
+    fontVariant: ['tabular-nums'],
+    fontWeight: 'bold',
   },
 
   centerMsg: {
@@ -1286,12 +1335,11 @@ const styles = StyleSheet.create({
   },
   lzRing: {
     position: 'absolute',
-    width: 21,
-    height: 21,
-    borderRadius: 10.5,
-    borderWidth: 1.5,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
     borderColor: colors.primary,
-    opacity: 0.55,
   },
 })
 
@@ -1386,12 +1434,13 @@ const drawer = StyleSheet.create({
 
 const fpb = StyleSheet.create({
   panel: {
-    backgroundColor: colors.glass,
+    backgroundColor: colors.glassSoft,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.outlineVariant,
     paddingVertical: space.sm,
     paddingHorizontal: space.md,
+    minWidth: 120,
     ...shadows.card,
   },
   cell: {
@@ -1441,7 +1490,7 @@ const teePanel = StyleSheet.create({
     letterSpacing: 1.6,
   },
   value: {
-    color: colors.primary,
+    color: colors.onSurfaceVariant,
     fontFamily: 'Sora_600SemiBold',
     fontSize: 22,
     lineHeight: 26,
@@ -1460,14 +1509,14 @@ const navBtn = StyleSheet.create({
   },
   disabled: { opacity: 0.35 },
   glyph: {
-    color: colors.onSurfaceVariant,
+    color: colors.onSurface,
     fontFamily: 'Sora_700Bold',
     fontSize: 24,
     lineHeight: 24,
     marginTop: -3,
   },
   label: {
-    color: colors.onSurfaceVariant,
+    color: colors.onSurface,
     fontFamily: 'Sora_700Bold',
     fontSize: 11,
     letterSpacing: 1.6,

@@ -122,6 +122,7 @@ export function IconButton({
       activeOpacity={0.85}
       style={[
         iconBtnStyles.base,
+        typeof size === 'number' && size > 56 && iconBtnStyles.large,
         { width: size, height: 'auto' },
         (
           {
@@ -160,6 +161,9 @@ const iconBtnStyles = StyleSheet.create({
     flexDirection: 'column',
     padding: 8,
     gap: 8,
+  },
+  large: {
+    borderRadius: radius['2xl'],
   },
   danger: { backgroundColor: colors.errorContainer },
   glass: {

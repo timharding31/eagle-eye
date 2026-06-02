@@ -8,7 +8,7 @@ Eagle Eye is a personal Android golf rangefinder, sideloaded as an APK. Expo + R
 
 Read these two files before doing any non-trivial work — they are load-bearing:
 
-- `CONTEXT.md` — the domain glossary. Use these terms **exactly** in code and docs (Course, Hole, Green, Pin, Round, Tee Shot, etc.). The "Terms to avoid" list there is enforced (no "yardage", "tracker", "user", "API"). Add a term to this file before naming a new domain concept in code.
+- `CONTEXT.md` — the domain glossary. Use these terms **exactly** in code and docs (Course, Hole, Green, Pin, Round, Tee, Landing Zone, etc.). The "Terms to avoid" list there is enforced (no "yardage", "tracker", "user", "API"). Add a term to this file before naming a new domain concept in code.
 - `docs/PLANNING.md` — the phasing plan, tech-stack rationale, module table, data model, and UX flows. The module table is the source of truth for which file owns which capability.
 - `docs/adr/` — nine ADRs that lock in non-obvious decisions (front/back via closest point, SQLite as source of truth, source-agnostic course data, manual hole nav, MapLibre offline packs, tee-box deferred, Find Nearby only, prefetch both tile layers, tee-correction overlay). Check these before changing related behavior.
 
@@ -46,7 +46,7 @@ Screens in `app/` (Expo Router, file-based) stay thin — if one grows past ~200
 
 - **SQLite is the source of truth** for rounds + course install state (ADR-002). Active-round resume on cold launch goes through `lib/round.ensureHydrated()`, called from `app/_layout.tsx` after `useMigrations` succeeds.
 - **Drizzle schemas** live next to the module that owns them (`lib/course/schema.ts`, `lib/round/schema.ts`). `drizzle.config.ts` globs `./lib/**/schema.ts`. `db/index.ts` is the single drizzle client.
-- **Migrations**: `drizzle/` is gitignored but its files (`migrations.js`, `*.sql`, `meta/`) are imported at runtime via `babel-plugin-inline-import` (`.sql` extension). Run `npm run db:generate` after any schema change — the import will fail otherwise.
+- **Migrations**: the runtime applies a hand-maintained static bundle at `db/migrations.ts` (imported in `app/_layout.tsx`, fed to `useMigrations`) — the gitignored `drizzle/` inline-import path was replaced by this bundle so cloud EAS builds don't depend on `.sql` import resolution. After a schema change, add a new `mNNNN` migration string + a matching journal entry (next `idx`, later `when`) to `db/migrations.ts`; don't edit an already-shipped migration (it won't re-run on installed devices). `npm run db:generate` still regenerates the `drizzle/` snapshot for dev reference, but it is not what runs at startup.
 - **Course JSON** in `courses/` is committed and bundled into the APK (`presidio`, `harding-park`, `crystal-springs`, `lincoln-park`, `peacock-gap`). Each is wired into `BUNDLED_REGISTRY` in `lib/course/index.ts`, keyed by slug; a new bundled course needs both the JSON file and a registry entry there. (`presidio` is the home course — OSM way 16650363.) Courses added at runtime via Find Nearby live in SQLite, not in `courses/`.
 
 ## Conventions worth knowing
@@ -55,5 +55,5 @@ Screens in `app/` (Expo Router, file-based) stay thin — if one grows past ~200
 - Prettier: no semicolons, single quotes, trailing commas, `arrowParens: avoid`.
 - The `Course` type uses GeoJSON-style `Position = [lng, lat]` ordering (see `lib/course/types.ts`). Internal app code uses `LatLng = { lat, lng }`. Conversions happen at the `lib/geo` boundary — don't sprinkle `[1, 0]` swaps in screens.
 - **UI is an in-house design system in `lib/theme.ts`** (`colors`, `space`, `radius`, `fonts`, `type`, `shadows` — deep-navy surfaces, cream text, maroon CTA, Sora typeface loaded in `_layout.tsx`). Screens compose plain RN `StyleSheet` with the leaf primitives in `components/` (`Button`, `Card`, `ScreenShell`, `SectionLabel`, `TopBar`, `EagleIcon`) and SVG glyphs in `components/icons.tsx` (hand-rolled paths + a few re-exports from `lucide-react-native`). Style off `@/lib/theme`, not hardcoded hex. There is no third-party UI kit — Gluestack was removed.
-- Distances are computed in metres throughout `lib/geo`; the hole screen converts to **yards** (golf default) only at the display boundary (`YD_TO_M`). A units toggle is deferred to the Phase 7 settings screen — there is no settings store yet.
+- Distances are computed in metres throughout `lib/geo`; the hole screen converts to **yards** (golf default) only at the display boundary (`M_TO_YD`). A units toggle is deferred to the Phase 7 settings screen — there is no settings store yet.
 - Map renderer is `@maplibre/maplibre-react-native` — requires the custom dev client, won't run in Expo Go. On-map text uses `MarkerView` (native RN view), not symbol/text layers — the satellite raster style has no glyphs URL and text-field layers crash on it.
