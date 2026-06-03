@@ -120,6 +120,11 @@ export const colors = {
   // On busy satellite imagery a drop shadow vanishes; a 1px light top edge is
   // what reads as a physical, lifted surface. [alpha 0.08–0.18]
   glassHighlight: toRgba(_primary, 0.14),
+  // Translucent dark fill layered *over* a real backdrop blur (expo-blur) so
+  // text stays legible while the frosted map still shows through. Lower than
+  // `glass`/`glassSoft` because the blur itself carries most of the occlusion.
+  // [alpha 0.30–0.55] — raise if numbers wash out over bright fairway.
+  glassFill: toRgba(shade(_surface, -0.059), 0.42),
 } as const
 
 export const space = {

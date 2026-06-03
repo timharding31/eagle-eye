@@ -337,6 +337,12 @@ export function HoleMap() {
     <Map
       key={`map-${holeNum}-${mapLayer}`}
       style={styles.map}
+      // Render to a TextureView (not the default GLSurfaceView). A SurfaceView
+      // punches its own window and is invisible to the dimezis backdrop blur —
+      // the frosted-glass chrome (GlassSurface / glass IconButtons) would show
+      // black behind it. TextureView composites into the view hierarchy so the
+      // blur captures the map. Slightly heavier, but fine for a single map.
+      androidView="texture"
       mapStyle={mapLayer === 'vector' ? vectorStyle : satelliteStyle}
       onPress={handleMapPress}
       onLayout={handleMapLayout}

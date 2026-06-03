@@ -187,6 +187,9 @@ export default function FixCourseScreen() {
       <Map
         key={`fix-${current.num}`}
         style={styles.map}
+        // TextureView so the glass IconButton's backdrop blur captures the map
+        // (a GLSurfaceView is invisible to the dimezis blur). See HoleMap.tsx.
+        androidView="texture"
         mapStyle={satelliteStyle}
         onPress={handleMapPress}
         onLayout={e => {

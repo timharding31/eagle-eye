@@ -8,6 +8,7 @@ import {
 } from 'react-native'
 
 import { colors, radius, shadows, space, type } from '@/lib/theme'
+import { GlassBackdrop } from './GlassSurface'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type Size = 'md' | 'lg'
@@ -141,6 +142,7 @@ export function IconButton({
         disabled && styles.disabled,
       ]}
     >
+      {variant === 'glass' && <GlassBackdrop />}
       {label && (
         <Text
           style={[iconBtnStyles.label, active && iconBtnStyles.labelActive]}
@@ -170,7 +172,10 @@ const iconBtnStyles = StyleSheet.create({
   },
   danger: { backgroundColor: colors.errorContainer },
   glass: {
-    backgroundColor: colors.glass,
+    // Backdrop comes from <GlassBackdrop/> (real blur + translucent fill);
+    // the container stays transparent and just clips it to the rounded rect.
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.outlineVariant,
     // 1px cream top highlight — same lifted-glass cue as the readout panels.

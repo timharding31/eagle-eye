@@ -7,8 +7,9 @@ import {
   nearestPointOnPolygon,
   projectionFraction,
 } from '@/lib/geo'
-import { colors, space, radius, shadows } from '@/lib/theme'
+import { colors, space, shadows } from '@/lib/theme'
 import { GolfTeeIcon, GreenBackIcon, GreenFrontIcon } from '@/components/icons'
+import { GlassSurface } from '@/components/GlassSurface'
 
 import { useHoleScene } from './scene'
 import { M_TO_YD } from './units'
@@ -86,13 +87,13 @@ function FpbPanel({
   distances: { front: number; pin: number; back: number } | null
 }) {
   return (
-    <View style={fpb.panel} pointerEvents="none">
+    <GlassSurface style={fpb.panel}>
       <FpbCell value={distances?.back} back />
       <View style={fpb.divider} />
       <FpbCell value={distances?.pin} primary />
       <View style={fpb.divider} />
       <FpbCell value={distances?.front} front />
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -101,10 +102,10 @@ function FpbPanel({
 // its own panel rather than a fourth FPB cell.
 function TeeDistancePanel({ meters }: { meters: number }) {
   return (
-    <View style={[fpb.panel, teePanel.panel]}>
+    <GlassSurface style={[fpb.panel, teePanel.panel]}>
       <GolfTeeIcon width={24} height={24} color={colors.onSurfaceVariant} />
       <Text style={teePanel.value}>{fmtYds(Math.round(meters * M_TO_YD))}</Text>
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -174,14 +175,9 @@ const styles = StyleSheet.create({
 })
 
 const fpb = StyleSheet.create({
+  // Border / radius / top-highlight / blur all live in GlassSurface now; this
+  // only carries the panel's padding, min width, and lift shadow.
   panel: {
-    backgroundColor: colors.glassSoft,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.outlineVariant,
-    // 1px cream top highlight for a lifted, glassy edge over the imagery.
-    borderTopWidth: 1,
-    borderTopColor: colors.glassHighlight,
     paddingVertical: space.sm,
     paddingHorizontal: space.md,
     minWidth: 108,
