@@ -4,7 +4,7 @@ The hole view is the app's primary screen — a full-screen map under glass chro
 This doc maps **what you see on screen** to **which component owns it**, so a visual
 tweak can be traced to a single file. It complements the module table in
 `PLANNING.md` (which maps domain capabilities to `lib/` modules); this one maps
-*pixels* to `components/hole/`.
+_pixels_ to `components/hole/`.
 
 ![Hole view](screenshots/hole-view.png)
 
@@ -56,15 +56,15 @@ top of it. Layout uses absolute positioning keyed to safe-area insets, not flow.
 
 ## Region → file → ownership
 
-| # | On-screen region | Component | Owns | Reads from scene |
-|---|------------------|-----------|------|------------------|
-| A | Glass header: logo, `HOLE n`, `PAR p • y YARDS`, home button | `TopBar` (via `HoleLayout`) | Title/subtitle text, home navigation | `currentHole`, `holeYards` |
-| B | Satellite map + tee / pin / LZ / "me" markers + LZ lines & labels | `HoleMap` | Camera framing, markers, tap handling (drop pin / drag LZ), LZ geometry | `currentHole`, `pin`, `position`, `teeLL`, `greenC`, `cameraMode`, `lzShown` |
-| C | Top-right F/G/B pill + tee-distance pill | `HoleMeasurements` | Front/center/back distance math, tee-relative fallback | `position`, `pin`, `teeLL`, `greenC`, `currentHole` |
-| D | Right-edge buttons: `LZ`, `Green/Hole`, `Set Tee` | `HoleButtonStack` | Camera-mode toggle, LZ toggle, opening the tee dialog | `cameraMode`, `lzShown`, `hasTeeOverride`, `teeBusy`, `currentHole.par` |
-| E | Bottom nav: `‹ PREV`, `HOLE n`, `NEXT ›`/`CARD` | `BottomDrawer` | Prev/next navigation, last-hole → scorecard | `prevHole`, `canAdvance`, `isLastHole`, `currentHole` |
-| F | Expandable 6-col hole grid (tap `HOLE n`) | `BottomDrawer` › `HoleGrid` | Animated expand, hole selection | `course.holes`, `currentHole` |
-| — | Tee-correction confirm modal | `TeeOverrideDialog` | Confirm/clear tee override, shows move distance | `teeDialogOpen`, `setTee`, `clearTee`, `position`, `hasTeeOverride` |
+| #   | On-screen region                                                  | Component                   | Owns                                                                    | Reads from scene                                                             |
+| --- | ----------------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| A   | Glass header: logo, `HOLE n`, `PAR p • y YARDS`, home button      | `TopBar` (via `HoleLayout`) | Title/subtitle text, home navigation                                    | `currentHole`, `holeYards`                                                   |
+| B   | Satellite map + tee / pin / LZ / "me" markers + LZ lines & labels | `HoleMap`                   | Camera framing, markers, tap handling (drop pin / drag LZ), LZ geometry | `currentHole`, `pin`, `position`, `teeLL`, `greenC`, `cameraMode`, `lzShown` |
+| C   | Top-right F/G/B pill + tee-distance pill                          | `HoleMeasurements`          | Front/center/back distance math, tee-relative fallback                  | `position`, `pin`, `teeLL`, `greenC`, `currentHole`                          |
+| D   | Right-edge buttons: `LZ`, `Green/Hole`, `Set Tee`                 | `HoleButtonStack`           | Camera-mode toggle, LZ toggle, opening the tee dialog                   | `cameraMode`, `lzShown`, `hasTeeOverride`, `teeBusy`, `currentHole.par`      |
+| E   | Bottom nav: `‹ PREV`, `HOLE n`, `NEXT ›`/`CARD`                   | `BottomDrawer`              | Prev/next navigation, last-hole → scorecard                             | `prevHole`, `canAdvance`, `isLastHole`, `currentHole`                        |
+| F   | Expandable 6-col hole grid (tap `HOLE n`)                         | `BottomDrawer` › `HoleGrid` | Animated expand, hole selection                                         | `course.holes`, `currentHole`                                                |
+| —   | Tee-correction confirm modal                                      | `TeeOverrideDialog`         | Confirm/clear tee override, shows move distance                         | `teeDialogOpen`, `setTee`, `clearTee`, `position`, `hasTeeOverride`          |
 
 ## How regions get their data
 

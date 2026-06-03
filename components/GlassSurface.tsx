@@ -19,7 +19,7 @@ import { colors, radius } from '@/lib/theme'
 //     blur to actually frost the map. See HoleMap.tsx.
 //   • It re-blurs every frame, so keep glass surfaces small/few. These panels
 //     are tiny, which is the budget this is sized for.
-const GLASS_BLUR_INTENSITY = 22 // [12–40] higher = stronger frost, less map detail
+const GLASS_BLUR_INTENSITY = 40 // [12–40] higher = stronger frost, less map detail
 
 // Just the blurred backdrop layer. Drop it as the first child of any clipped,
 // self-positioning container (e.g. a TouchableOpacity that already owns its
@@ -33,7 +33,7 @@ export function GlassBackdrop({
     <BlurView
       intensity={intensity}
       tint="dark"
-      experimentalBlurMethod="dimezisBlurViewSdk31Plus"
+      blurMethod="dimezisBlurViewSdk31Plus"
       style={[StyleSheet.absoluteFill, fill.fill]}
     />
   )

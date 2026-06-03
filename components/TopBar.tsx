@@ -102,6 +102,8 @@ export function IconAction({ onPress, label, glyph }: IconActionProps) {
   )
 }
 
+const EAGLE_SIZE = 124
+
 const styles = StyleSheet.create({
   bar: {
     overflow: 'hidden',
@@ -135,9 +137,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logo: {
-    width: 124,
-    height: 124,
-    borderRadius: radius.full,
+    width: EAGLE_SIZE,
+    height: EAGLE_SIZE,
     marginTop: 2,
   },
   backBtn: {
