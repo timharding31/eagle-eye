@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { create } from 'zustand'
 
 import { db } from '@/db'
@@ -112,6 +112,47 @@ export async function setTeeOverride(
       target: [teeOverrides.courseId, teeOverrides.holeNum],
       set: { lat: row.lat, lng: row.lng, setAt: row.setAt },
     })
+}
+
+/**
+ * Read the stored tee correction for one hole, or null when the hole still
+ * uses its source (OSM/bundled) tee. Lets callers reflect whether a
+ * correction is active without diffing coordinates.
+ */
+export async function getTeeOverride(
+  courseId: string,
+  holeNum: number,
+): Promise<{ lat: number; lng: number; setAt: number } | null> {
+  const [row] = await db
+    .select()
+    .from(teeOverrides)
+    .where(
+      and(
+        eq(teeOverrides.courseId, courseId),
+        eq(teeOverrides.holeNum, holeNum),
+      ),
+    )
+    .limit(1)
+  return row ? { lat: row.lat, lng: row.lng, setAt: row.setAt } : null
+}
+
+/**
+ * Remove a hole's tee correction, restoring its source (OSM/bundled) tee on
+ * the next loadCourse. The inverse of setTeeOverride and a no-op when none
+ * exists — the recovery path for an errant correction.
+ */
+export async function clearTeeOverride(
+  courseId: string,
+  holeNum: number,
+): Promise<void> {
+  await db
+    .delete(teeOverrides)
+    .where(
+      and(
+        eq(teeOverrides.courseId, courseId),
+        eq(teeOverrides.holeNum, holeNum),
+      ),
+    )
 }
 
 /**
