@@ -103,6 +103,10 @@ interface IconButtonProps {
   label?: string
   size?: number
   variant?: 'primary' | 'danger' | 'glass' | 'ghost'
+  // Reflects an on/off toggle's state in the control itself (gold accent ring
+  // + gold label) rather than via a text suffix. The caller still owns the
+  // glyph color, so tint it to match when active.
+  active?: boolean
   disabled?: boolean
 }
 
@@ -112,6 +116,7 @@ export function IconButton({
   label,
   size = 56,
   variant = 'primary',
+  active,
   disabled,
 }: IconButtonProps) {
   return (
@@ -132,10 +137,17 @@ export function IconButton({
             ghost: iconBtnStyles.ghost,
           } as const
         )[variant],
+        active && iconBtnStyles.active,
         disabled && styles.disabled,
       ]}
     >
-      {label && <Text style={[iconBtnStyles.label]}>{label}</Text>}
+      {label && (
+        <Text
+          style={[iconBtnStyles.label, active && iconBtnStyles.labelActive]}
+        >
+          {label}
+        </Text>
+      )}
       <Text style={iconBtnStyles.glyph}>{glyph}</Text>
     </TouchableOpacity>
   )
@@ -161,10 +173,25 @@ const iconBtnStyles = StyleSheet.create({
     backgroundColor: colors.glass,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.outlineVariant,
+    // 1px cream top highlight — same lifted-glass cue as the readout panels.
+    borderTopWidth: 1,
+    borderTopColor: colors.glassHighlight,
   },
   ghost: {
     backgroundColor: 'transparent',
     borderColor: 'transparent',
+  },
+  // Active toggle: a gold accent ring (matches the gold "active" cue already
+  // used by the hole-grid selection) so on/off reads from the control, not a
+  // label suffix.
+  active: {
+    borderWidth: 1.5,
+    borderColor: colors.goldenEagle,
+    borderTopWidth: 1.5,
+    borderTopColor: colors.goldenEagle,
+  },
+  labelActive: {
+    color: colors.goldenEagle,
   },
   glyph: {
     color: colors.onSurface,

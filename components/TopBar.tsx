@@ -12,8 +12,13 @@ import { colors, radius, space, type } from '@/lib/theme'
 import { EagleIcon } from './EagleIcon'
 
 interface TopBarProps {
-  title: string
+  title?: string
   subtitle?: string
+  // A node centered horizontally across the whole bar, independent of the
+  // left/right clusters. Use for a tidy centered readout that shouldn't crowd
+  // the logo. pointerEvents are disabled so it never intercepts the side
+  // controls — keep it non-interactive.
+  center?: ReactNode
   onBack?: () => void
   right?: ReactNode
   variant?: 'solid' | 'glass'
@@ -23,6 +28,7 @@ interface TopBarProps {
 export function TopBar({
   title,
   subtitle,
+  center,
   onBack,
   right,
   variant = 'solid',
@@ -52,19 +58,27 @@ export function TopBar({
           ) : (
             <EagleIcon style={styles.logo} />
           )}
-          <View style={styles.titleBlock}>
-            <Text style={styles.title} numberOfLines={1}>
-              {title}
-            </Text>
-            {subtitle ? (
-              <Text style={styles.subtitle} numberOfLines={1}>
-                {subtitle}
+          {title ? (
+            <View style={styles.titleBlock}>
+              <Text style={styles.title} numberOfLines={1}>
+                {title}
               </Text>
-            ) : null}
-          </View>
+              {subtitle ? (
+                <Text style={styles.subtitle} numberOfLines={1}>
+                  {subtitle}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
         {right ? <View style={styles.right}>{right}</View> : null}
       </View>
+
+      {center ? (
+        <View style={[styles.center, { top: insets.top }]} pointerEvents="none">
+          {center}
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -109,6 +123,17 @@ const styles = StyleSheet.create({
     gap: space.md,
   },
   right: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  // Overlay centered across the full bar width, sitting over the 64px inner
+  // row (below the status-bar inset). Non-interactive so the side clusters
+  // stay tappable.
+  center: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   logo: {
     width: 124,
     height: 124,

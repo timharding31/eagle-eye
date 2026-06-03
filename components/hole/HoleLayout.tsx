@@ -27,13 +27,16 @@ export function HoleLayout() {
       <HoleMap />
 
       <TopBar
-        title={`HOLE ${currentHole.num}`}
-        subtitle={`PAR ${currentHole.par} • ${holeYards} YARDS`}
         variant="glass"
+        center={
+          <Text style={styles.headerReadout}>
+            {`PAR ${currentHole.par} · ${holeYards} YDS`}
+          </Text>
+        }
         right={
           <IconAction
             label="Home"
-            glyph={<HomeIcon color={colors.onSurfaceVariant} />}
+            glyph={<HomeIcon color={colors.onSurface} />}
             onPress={() =>
               router.canGoBack() ? router.back() : router.replace('/' as never)
             }
@@ -68,6 +71,17 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
+  },
+
+  // Centered top readout: the hole's par + playing length. The hole number
+  // lives in the bottom drawer, so it's dropped here to keep this minimal.
+  headerReadout: {
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 16,
+    letterSpacing: 1,
+    paddingLeft: 48,
+    color: colors.onSurface,
+    fontVariant: ['tabular-nums'],
   },
 
   permWarn: {

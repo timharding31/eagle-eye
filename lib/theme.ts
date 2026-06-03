@@ -116,6 +116,10 @@ export const colors = {
   // ── glass effects (opaque dark surface at high alpha + hairline border) ──
   glass: toRgba(shade(_surface, -0.059), 0.92), // surfaceHighest tint
   glassSoft: toRgba(_surface, 0.85),
+  // Cream-tinted inner top highlight applied to the top edge of glass panels.
+  // On busy satellite imagery a drop shadow vanishes; a 1px light top edge is
+  // what reads as a physical, lifted surface. [alpha 0.08–0.18]
+  glassHighlight: toRgba(_primary, 0.14),
 } as const
 
 export const space = {

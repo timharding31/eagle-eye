@@ -8,6 +8,10 @@
 
 _Stand on the tee. Glance at your phone. Know the number._
 
+<br />
+
+<img src="docs/screenshots/hole-view.png" alt="Hole view — front/center/back distances over offline satellite imagery" width="280" />
+
 </div>
 
 ---

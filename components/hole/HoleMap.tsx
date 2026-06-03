@@ -69,10 +69,15 @@ const LZ_INIT_FRACTIONS: Record<number, readonly number[]> = {
   5: [4 / 9, 7 / 9],
 }
 
-// Gap (in screen px) left between a Landing Zone marker and the dashed
+// Gap (in screen px) left between a Landing Zone marker and the
 // planning segments meeting it, so the line doesn't run through the
 // crosshair's hollow center. Converted to metres at the active frame zoom.
 const LZ_LINE_GAP_PX = 7
+
+// Whether the LZ planning segments draw as a solid line or a dashed one.
+// 'dashed' adds line-dasharray: [2, 2]; 'solid' omits it. Flip to revisit
+// the dashed look.
+const LINE_STYLE: 'solid' | 'dashed' = 'solid'
 
 function lzFractionsFor(par: number): readonly number[] {
   return LZ_INIT_FRACTIONS[par] ?? []
@@ -152,9 +157,16 @@ export function HoleMap() {
     )
   }
 
-  // LZs show for par 4/5 unless the player toggles them off. No automatic
-  // distance-based hiding — it read as clunky on-course.
-  const lzVisible = currentHole.par >= 4 && lzShown
+  // LZ crosshairs (and the tap-to-move them) show for par 4/5 unless the
+  // player toggles them off. No automatic distance-based hiding — it read as
+  // clunky on-course.
+  const lzVisible = lzShown
+
+  // The planning line + distance labels render whenever the crosshairs do,
+  // plus on par 3s — there a single tee→pin segment (no crosshairs, since the
+  // shot leaves no landing zone) still gives a useful distance readout. Par 3
+  // has no LZ toggle, so it always shows.
+  const segmentsVisible = lzVisible
 
   const greenPoints: LatLng[] = currentHole.green.coordinates[0].map(
     ([lng, lat]) => ({ lat, lng }),
@@ -294,10 +306,10 @@ export function HoleMap() {
   }
 
   const lzSegments: LzSegment[] = []
-  if (lzVisible) {
+  if (segmentsVisible) {
     const chain: LatLng[] = [teeLL, ...lzPositions, pin]
     // Leave a gap where a segment meets an LZ crosshair (chain indices
-    // 1..lzPositions.length) so the dashed line stops short of the marker's
+    // 1..lzPositions.length) so the line stops short of the marker's
     // hollow center. Tee (index 0) and pin (last) get no gap.
     const gapM =
       frame && mapSize
@@ -384,7 +396,7 @@ export function HoleMap() {
             paint={{
               'line-color': colors.surface,
               'line-width': 2,
-              'line-dasharray': [2, 2],
+              ...(LINE_STYLE === 'dashed' ? { 'line-dasharray': [2, 2] } : {}),
               'line-opacity': 0.85,
             }}
           />

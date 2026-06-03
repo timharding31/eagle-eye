@@ -7,7 +7,7 @@ import {
   nearestPointOnPolygon,
   projectionFraction,
 } from '@/lib/geo'
-import { colors, space, radius, type, shadows } from '@/lib/theme'
+import { colors, space, radius, shadows } from '@/lib/theme'
 import { GolfTeeIcon, GreenBackIcon, GreenFrontIcon } from '@/components/icons'
 
 import { useHoleScene } from './scene'
@@ -19,32 +19,47 @@ import { M_TO_YD } from './units'
 // stays visible even past the green.
 const TEE_MARKER_MIN_FRACTION = 0.02
 
+// Past this GPS→pin distance the player isn't at the course (e.g. previewing
+// the hole from home), so live distances are meaningless. Above it the FPB
+// panel falls back to tee→green playing distances and the tee pill hides.
+// Range hint: 500–2000 m. Below ~500 the walk between tee and green could
+// trip it on a long hole; above ~2000 a far-but-on-course lie reads stale.
+const TEE_RELATIVE_MIN_M = 1000
+
 // The top-right F/G/P pill plus the tee-distance pill below it. Owns its own
 // distance math — nothing else on the screen needs these values.
 export function HoleMeasurements() {
   const insets = useSafeAreaInsets()
   const { position, pin, teeLL, greenC, currentHole } = useHoleScene()
 
-  const distances = position
+  // When the player is far from the pin, treat the tee as the origin: the
+  // panel shows the hole's static playing distances rather than stale GPS.
+  const relativeToTee =
+    position != null && distanceMeters(position, pin) > TEE_RELATIVE_MIN_M
+  const origin = relativeToTee ? teeLL : position
+
+  const distances = origin
     ? {
         front: distanceMeters(
-          position,
-          nearestPointOnPolygon(position, currentHole.green),
+          origin,
+          nearestPointOnPolygon(origin, currentHole.green),
         ),
-        pin: distanceMeters(position, pin),
+        pin: distanceMeters(origin, pin),
         back: distanceMeters(
-          position,
-          farthestPointOnPolygon(position, currentHole.green),
+          origin,
+          farthestPointOnPolygon(origin, currentHole.green),
         ),
       }
     : null
 
   // Distance from the (possibly corrected) tee, shown once the player is
   // off the tee. Straight-line GPS→tee; lateral offset is ignored — the
-  // projection fraction is only the visibility gate.
-  const teeFraction = position
-    ? projectionFraction(position, teeLL, greenC)
-    : null
+  // projection fraction is only the visibility gate. Hidden in relative-to-tee
+  // mode, where the FPB panel is already tee-anchored.
+  const teeFraction =
+    position && !relativeToTee
+      ? projectionFraction(position, teeLL, greenC)
+      : null
   const teeDistanceM =
     teeFraction != null && teeFraction > TEE_MARKER_MIN_FRACTION
       ? distanceMeters(position!, teeLL)
@@ -142,15 +157,17 @@ function FpbCell({
 function fmtYds(yds: number | null) {
   if (yds == null) return '--'
   if (yds < 1e3) return String(yds)
-  return (yds / 1e3).toFixed(0) + '00'
+  return (yds / 1e3).toFixed(0) + 'K'
 }
 
 const styles = StyleSheet.create({
   // Top-right stack: the FPB pill with the tee-distance pill below it.
   // Right-aligned so the narrower tee pill hugs the same edge.
+  // Shares the same right margin as the control button stack (HoleButtonStack
+  // → space.lg) so both right-edge clusters snap to one gutter.
   rightStack: {
     position: 'absolute',
-    right: space.sm,
+    right: space.lg,
     alignItems: 'flex-end',
     gap: space.sm,
   },
@@ -162,6 +179,9 @@ const fpb = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.outlineVariant,
+    // 1px cream top highlight for a lifted, glassy edge over the imagery.
+    borderTopWidth: 1,
+    borderTopColor: colors.glassHighlight,
     paddingVertical: space.sm,
     paddingHorizontal: space.md,
     minWidth: 108,

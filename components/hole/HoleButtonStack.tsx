@@ -23,7 +23,6 @@ export function HoleButtonStack() {
     teeBusy,
     position,
     hasTeeOverride,
-    currentHole,
     lzShown,
     toggleLz,
   } = useHoleScene()
@@ -32,23 +31,28 @@ export function HoleButtonStack() {
 
   return (
     <View style={[styles.iconButtons, { bottom: floatingBottom + 48 }]}>
-      {cameraMode === 'hole' ? (
-        <IconButton
-          glyph={<GolfTeeIcon width={48} height={48} color={colors.primary} />}
-          onPress={openTeeDialog}
-          label="Set Tee"
-          size={80}
-          variant="glass"
-          disabled={teeBusy || (!position && !hasTeeOverride)}
-        />
-      ) : null}
+      <IconButton
+        glyph={
+          <GolfTeeIcon
+            width={48}
+            height={48}
+            color={hasTeeOverride ? colors.goldenEagle : colors.onSurface}
+          />
+        }
+        onPress={openTeeDialog}
+        label="Set Tee"
+        size={80}
+        variant="glass"
+        disabled={teeBusy || (!position && !hasTeeOverride)}
+        active={hasTeeOverride}
+      />
 
       <IconButton
         glyph={
           cameraMode === 'green' ? (
-            <LandPlotIcon width={48} height={48} color={colors.primary} />
+            <LandPlotIcon width={48} height={48} color={colors.onSurface} />
           ) : (
-            <GoalIcon width={48} height={48} color={colors.primary} />
+            <GoalIcon width={48} height={48} color={colors.onSurface} />
           )
         }
         onPress={toggleCameraMode}
@@ -57,21 +61,22 @@ export function HoleButtonStack() {
         variant="glass"
       />
 
-      {currentHole.par >= 4 && cameraMode === 'hole' && (
-        <IconButton
-          glyph={
-            <CrosshairIcon
-              width={48}
-              height={48}
-              color={lzShown ? colors.onSurface : colors.onSurfaceVariant}
-            />
-          }
-          onPress={toggleLz}
-          label={`LZ${lzShown ? ': ON' : ': OFF'}`}
-          size={80}
-          variant="glass"
-        />
-      )}
+      {/* {currentHole.par >= 4 && cameraMode === 'hole' && ( */}
+      <IconButton
+        glyph={
+          <CrosshairIcon
+            width={48}
+            height={48}
+            color={lzShown ? colors.goldenEagle : colors.onSurface}
+          />
+        }
+        onPress={toggleLz}
+        label="LZ"
+        size={80}
+        variant="glass"
+        active={lzShown}
+      />
+      {/* )} */}
     </View>
   )
 }
