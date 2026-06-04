@@ -25,7 +25,7 @@ import {
 import { setPin } from '@/lib/round'
 import { colors, fonts, radius } from '@/lib/theme'
 import {
-  satelliteStyle,
+  satelliteStyleFor,
   usePrefetchStatus,
   vectorStyle,
   type LayerKind,
@@ -61,7 +61,7 @@ const DRAWER_CHROME = 272
 const FRAME_SIDE_PAD = 24
 const FRAME_RIGHT_CHROME = 56
 const FRAME_ZOOM_ADJUST = 0
-const GREEN_ZOOM_ADJUST = 0
+const GREEN_ZOOM_ADJUST = -0.5
 
 // Knobs for Landing Zone planning waypoints (par 4 / par 5 only).
 // LZ_INIT_FRACTIONS: fractions along the tee→green-centroid line at which
@@ -349,7 +349,9 @@ export function HoleMap() {
       // black behind it. TextureView composites into the view hierarchy so the
       // blur captures the map. Slightly heavier, but fine for a single map.
       androidView="texture"
-      mapStyle={mapLayer === 'vector' ? vectorStyle : satelliteStyle}
+      mapStyle={
+        mapLayer === 'vector' ? vectorStyle : satelliteStyleFor(round.courseId)
+      }
       onPress={handleMapPress}
       onLayout={handleMapLayout}
       onDidFinishLoadingMap={() => setIsMapReady(true)}

@@ -16,27 +16,68 @@ const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 
 export const vectorStyle = OPENFREEMAP_STYLE
 
-const satelliteStyleSpec: StyleSpecification = {
-  version: 8,
-  sources: {
-    esri: {
-      type: 'raster',
-      tiles: [ESRI_SATELLITE_TILES],
-      tileSize: 256,
-      attribution: 'Tiles © Esri',
-      maxzoom: 20,
-    },
-  },
-  layers: [
-    {
-      id: 'esri-satellite',
-      type: 'raster',
-      source: 'esri',
-    },
-  ],
+const MIN_ZOOM = 16
+// ESRI World Imagery serves real native tiles to z20 (~0.12 m/px) over our SF
+// courses — verified distinct, non-upscaled tiles. Presidio (the home course)
+// uniquely also has native z21 (~6 cm/px); every other course tops out at z20.
+// The hole-overview camera only frames to ~z16–17, so the deep levels only pay
+// off in zoom-to-green mode (see GREEN_ZOOM_ADJUST in HoleMap). Each extra level
+// is ~4× the tiles across the whole bbox, so we cap per-course rather than
+// globally. Range hint: 19 (smallest packs) – 21 (sharpest, ~16× a z19 pack).
+const DEFAULT_SATELLITE_MAX_ZOOM = 20
+const SATELLITE_MAX_ZOOM_BY_COURSE: Record<string, number> = {
+  presidio: 21,
+}
+// The hosted offline style's source maxzoom must be ≥ the deepest per-course
+// pack maxZoom, or the downloader won't enumerate that level. Keep this in sync
+// with the "maxzoom" in docs/satellite-style.json.
+const SATELLITE_SOURCE_MAXZOOM = 21
+// Vector (OpenFreeMap) detail is plenty at z20; no per-course need.
+const VECTOR_MAX_ZOOM = 20
+
+export function satelliteMaxZoom(courseId: string): number {
+  return SATELLITE_MAX_ZOOM_BY_COURSE[courseId] ?? DEFAULT_SATELLITE_MAX_ZOOM
 }
 
-export const satelliteStyle: StyleSpecification = satelliteStyleSpec
+// Per ADR-008: expand the bbox slightly so holes that hug the OSM polygon
+// boundary don't hit missing tiles.
+const BBOX_EXPAND_PCT = 0.07
+
+function buildSatelliteStyle(maxzoom: number): StyleSpecification {
+  return {
+    version: 8,
+    sources: {
+      esri: {
+        type: 'raster',
+        tiles: [ESRI_SATELLITE_TILES],
+        tileSize: 256,
+        attribution: 'Tiles © Esri',
+        maxzoom,
+      },
+    },
+    layers: [{ id: 'esri-satellite', type: 'raster', source: 'esri' }],
+  }
+}
+
+// Cache by maxzoom so each call returns a stable object reference — the Map
+// component remounts when its mapStyle prop identity changes, so we must not
+// build a fresh object per render.
+const satelliteStyleCache = new Map<number, StyleSpecification>()
+
+// The on-screen render style for a course. The source maxzoom must match the
+// course's deepest *downloaded* level: at green-zoom MapLibre overzooms the
+// deepest tile the source advertises, so a course capped at z20 must say
+// maxzoom:20 (else it requests nonexistent z21 tiles and shows blank), and
+// Presidio must say maxzoom:21 to actually render its z21 tiles.
+export function satelliteStyleFor(courseId: string): StyleSpecification {
+  const mz = satelliteMaxZoom(courseId)
+  let style = satelliteStyleCache.get(mz)
+  if (!style) {
+    style = buildSatelliteStyle(mz)
+    satelliteStyleCache.set(mz, style)
+  }
+  return style
+}
 
 // The offline downloader (OfflineTilePyramidRegionDefinition) treats `mapStyle`
 // as a resource it must *load* before it can enumerate a source's tile pyramid.
@@ -48,24 +89,13 @@ export const satelliteStyle: StyleSpecification = satelliteStyleSpec
 // The loader only fetches over http(s), so the style is hosted as a static file
 // on GitHub Pages (docs/satellite-style.json in this repo). The downloader
 // fetches it (counted as the first required resource), parses the raster source,
-// and enumerates the z16–20 ESRI tile pyramid within the pack bounds. The fetch
+// and enumerates the ESRI tile pyramid (MIN_ZOOM..per-course maxZoom) within the
+// pack bounds. The fetch
 // only happens at prefetch time, which already requires network — offline play
 // at the course is unaffected. To change the style, edit docs/satellite-style.json
 // and re-run "Refetch All Imagery" (Pages serves the live file).
 const satelliteStyleUrl =
   'https://timharding31.github.io/eagle-eye/satellite-style.json'
-
-const MIN_ZOOM = 16
-// ESRI World Imagery serves real native tiles to z20 (~0.12 m/px) over our SF
-// courses — verified distinct, non-upscaled tiles at z20 (and z21 at Presidio).
-// The hole-overview camera only frames to ~z16–17, so z20 only pays off in
-// zoom-to-green mode (see GREEN_ZOOM_ADJUST in HoleMap). Going past 20 mostly
-// bloats packs (each level ~4× the tiles across the whole bbox) for no gain.
-// Range hint: 19 (smallest packs) – 20 (sharp greens, ~4× larger packs).
-const MAX_ZOOM = 20
-// Per ADR-008: expand the bbox slightly so holes that hug the OSM polygon
-// boundary don't hit missing tiles.
-const BBOX_EXPAND_PCT = 0.07
 
 export type LayerKind = 'vector' | 'satellite'
 export type LayerState = 'idle' | 'downloading' | 'complete' | 'error'
@@ -145,10 +175,6 @@ function packStateToLayerState(
 
 function onProgress(courseId: string, layer: LayerKind) {
   return (_pack: OfflinePack, status: OfflinePackStatus) => {
-    // TEMP diagnostic — remove once downloads confirmed working.
-    console.log(
-      `[tiles] progress ${courseId}/${layer} ${status.percentage}% state=${status.state} completed=${status.completedResourceCount}/${status.requiredResourceCount}`,
-    )
     setLayer(courseId, layer, {
       state: packStateToLayerState(status),
       percentage: status.percentage,
@@ -159,8 +185,6 @@ function onProgress(courseId: string, layer: LayerKind) {
 
 function onError(courseId: string, layer: LayerKind) {
   return (_pack: OfflinePack, err: OfflinePackError) => {
-    // TEMP diagnostic — remove once downloads confirmed working.
-    console.log(`[tiles] ERROR ${courseId}/${layer}: ${err.message}`)
     setLayer(courseId, layer, {
       state: 'error',
       errorMessage: err.message,
@@ -174,13 +198,9 @@ async function downloadLayer(
   bounds: BBox,
 ): Promise<void> {
   const existing = await findPack(courseId, layer)
-  console.log(`[tiles] downloadLayer ${courseId}/${layer} existing=${!!existing}`)
   if (existing) {
     const status = await existing.status()
     const layerState = packStateToLayerState(status)
-    console.log(
-      `[tiles] resume ${courseId}/${layer} state=${layerState} pct=${status.percentage}`,
-    )
     setLayer(courseId, layer, {
       state: layerState,
       percentage: status.percentage,
@@ -201,28 +221,27 @@ async function downloadLayer(
   let pack: OfflinePack
   try {
     const mapStyle = layer === 'vector' ? vectorStyle : satelliteStyleUrl
-    console.log(
-      `[tiles] createPack ${courseId}/${layer} style=${mapStyle.slice(0, 48)}…`,
-    )
+    // The hosted style advertises a source maxzoom of SATELLITE_SOURCE_MAXZOOM;
+    // clamp so we never enumerate a level the source can't serve.
+    const maxZoom =
+      layer === 'satellite'
+        ? Math.min(satelliteMaxZoom(courseId), SATELLITE_SOURCE_MAXZOOM)
+        : VECTOR_MAX_ZOOM
     pack = await OfflineManager.createPack(
       {
         mapStyle,
         bounds: expandBounds(bounds),
         minZoom: MIN_ZOOM,
-        maxZoom: MAX_ZOOM,
+        maxZoom,
         metadata: { courseId, layer } satisfies PackMeta,
       },
       onProgress(courseId, layer),
       onError(courseId, layer),
     )
-    console.log(`[tiles] createPack OK ${courseId}/${layer} id=${pack.id}`)
   } catch (e) {
     // createPack rejecting (bad style URL, write failure, etc.) would otherwise
     // leave the layer stuck at 'downloading' 0% with no error surfaced — the
     // exact silent-stall symptom this code path is fixing. Make it visible.
-    console.log(
-      `[tiles] createPack THREW ${courseId}/${layer}: ${e instanceof Error ? e.message : String(e)}`,
-    )
     setLayer(courseId, layer, {
       state: 'error',
       errorMessage: e instanceof Error ? e.message : String(e),
@@ -235,29 +254,12 @@ async function downloadLayer(
   // lost and the store stays stuck at downloading/0%. Poll status once now that
   // the listener is live to catch any missed completion.
   const st = await pack.status()
-  console.log(
-    `[tiles] post-create ${courseId}/${layer} state=${st.state} pct=${st.percentage} req=${st.requiredResourceCount} done=${st.completedResourceCount} tiles=${st.completedTileCount}`,
-  )
   if (st.state !== 'active') {
     setLayer(courseId, layer, {
       state: packStateToLayerState(st),
       percentage: st.percentage,
       errorMessage: undefined,
     })
-  }
-  // TEMP: poll a few seconds in to see whether the download actually enumerated
-  // tiles and is fetching. requiredResourceCount=0 ⇒ the style yielded no tiles.
-  if (layer === 'satellite') {
-    setTimeout(() => {
-      pack
-        .status()
-        .then(s =>
-          console.log(
-            `[tiles] +6s ${courseId}/${layer} state=${s.state} pct=${s.percentage} req=${s.requiredResourceCount} done=${s.completedResourceCount} tiles=${s.completedTileCount}`,
-          ),
-        )
-        .catch(err => console.log(`[tiles] +6s status ERR ${courseId}: ${err}`))
-    }, 6000)
   }
 }
 

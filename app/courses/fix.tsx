@@ -33,7 +33,7 @@ import {
 import type { MissingHole, Position } from '@/lib/course/types'
 import { frameForHole, type LatLng } from '@/lib/geo'
 import { colors, fonts, radius, shadows, space, type } from '@/lib/theme'
-import { prefetchForCourse, satelliteStyle } from '@/lib/tiles'
+import { prefetchForCourse, satelliteStyleFor } from '@/lib/tiles'
 
 export default function FixCourseScreen() {
   const router = useRouter()
@@ -193,7 +193,7 @@ export default function FixCourseScreen() {
             // TextureView so the glass IconButton's backdrop blur captures the map
             // (a GLSurfaceView is invisible to the dimezis blur). See HoleMap.tsx.
             androidView="texture"
-            mapStyle={satelliteStyle}
+            mapStyle={satelliteStyleFor(pending.course.id)}
             onPress={handleMapPress}
             onLayout={e => {
               const { width, height } = e.nativeEvent.layout

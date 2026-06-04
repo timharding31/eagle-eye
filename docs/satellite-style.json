@@ -8,7 +8,7 @@
       ],
       "tileSize": 256,
       "attribution": "Tiles © Esri",
-      "maxzoom": 20
+      "maxzoom": 21
     }
   },
   "layers": [
