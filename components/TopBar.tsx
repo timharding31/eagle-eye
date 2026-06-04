@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { colors, radius, space, type } from '@/lib/theme'
 import { EagleIcon } from './EagleIcon'
+import { GlassBackdrop } from './GlassSurface'
 
 interface TopBarProps {
   title?: string
@@ -35,15 +36,21 @@ export function TopBar({
   style,
 }: TopBarProps) {
   const insets = useSafeAreaInsets()
-  const background = variant === 'glass' ? colors.glassSoft : colors.surface
+  const glass = variant === 'glass'
   return (
     <View
       style={[
         styles.bar,
-        { backgroundColor: background, paddingTop: insets.top },
+        {
+          // Glass: transparent so the GlassBackdrop's real blur + translucent
+          // fill shows through. Solid: the opaque surface colour.
+          backgroundColor: glass ? 'transparent' : colors.surface,
+          paddingTop: insets.top,
+        },
         style,
       ]}
     >
+      {glass && <GlassBackdrop />}
       <View style={styles.inner}>
         <View style={styles.left}>
           {onBack ? (

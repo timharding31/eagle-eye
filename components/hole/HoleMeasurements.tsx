@@ -8,7 +8,12 @@ import {
   projectionFraction,
 } from '@/lib/geo'
 import { colors, space, shadows } from '@/lib/theme'
-import { GolfTeeIcon, GreenBackIcon, GreenFrontIcon } from '@/components/icons'
+import {
+  FlagIcon,
+  GolfTeeIcon,
+  GreenBackIcon,
+  GreenFrontIcon,
+} from '@/components/icons'
 import { GlassSurface } from '@/components/GlassSurface'
 
 import { useHoleScene } from './scene'
@@ -103,7 +108,7 @@ function FpbPanel({
 function TeeDistancePanel({ meters }: { meters: number }) {
   return (
     <GlassSurface style={[fpb.panel, teePanel.panel]}>
-      <GolfTeeIcon width={24} height={24} color={colors.onSurfaceVariant} />
+      <GolfTeeIcon width={24} height={24} color={colors.onSurface} />
       <Text style={teePanel.value}>{fmtYds(Math.round(meters * M_TO_YD))}</Text>
     </GlassSurface>
   )
@@ -125,27 +130,15 @@ function FpbCell({
   const yds = value != null ? Math.round(value * M_TO_YD) : null
   return (
     <View style={fpb.cell}>
-      {(front || back) && (
-        <>
-          {front ? (
-            <GreenFrontIcon
-              width={24}
-              height={24}
-              color={colors.onSurfaceVariant}
-            />
-          ) : (
-            <GreenBackIcon
-              width={24}
-              height={24}
-              color={colors.onSurfaceVariant}
-            />
-          )}
-        </>
-      )}
+      {front ? (
+        <GreenFrontIcon width={24} height={24} color={colors.onSurface} />
+      ) : back ? (
+        <GreenBackIcon width={24} height={24} color={colors.onSurface} />
+      ) : null}
       <Text
         style={[
           fpb.value,
-          primary ? fpb.valuePrimary : { color: colors.onSurfaceVariant },
+          primary && fpb.valuePrimary,
           { flexGrow: 1, textAlign: 'right' },
         ]}
       >
@@ -180,7 +173,6 @@ const fpb = StyleSheet.create({
   panel: {
     paddingVertical: space.sm,
     paddingHorizontal: space.md,
-    minWidth: 108,
     ...shadows.card,
   },
   cell: {
@@ -196,18 +188,22 @@ const fpb = StyleSheet.create({
     marginVertical: 4,
   },
   value: {
+    fontFamily: 'Sora_500Medium',
     color: colors.onSurface,
-    fontFamily: 'Sora_600SemiBold',
-    fontSize: 22,
-    lineHeight: 26,
+    fontSize: 20,
+    lineHeight: 24,
     fontVariant: ['tabular-nums'],
     alignItems: 'center',
+    letterSpacing: -0.5,
   },
   valuePrimary: {
-    color: colors.primary,
-    fontSize: 34,
-    lineHeight: 38,
+    color: colors.goldenEagle,
+    fontFamily: 'Sora_600SemiBold',
+    fontSize: 36,
+    lineHeight: 40,
     letterSpacing: -0.5,
+    textAlign: 'center',
+    flex: 1,
   },
 })
 
@@ -219,7 +215,7 @@ const teePanel = StyleSheet.create({
     gap: space.sm,
   },
   value: {
-    color: colors.onSurfaceVariant,
+    color: colors.onSurface,
     fontFamily: 'Sora_600SemiBold',
     fontSize: 22,
     lineHeight: 26,

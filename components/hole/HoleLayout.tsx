@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router'
 import { HomeIcon } from 'lucide-react-native'
 
 import { IconAction, TopBar } from '@/components/TopBar'
+import { GlassBlurTarget, GlassRoot } from '@/components/GlassSurface'
 import { colors, space, radius, type } from '@/lib/theme'
 
 import { useHoleScene } from './scene'
@@ -23,48 +24,58 @@ export function HoleLayout() {
   const { currentHole, holeYards, locationGranted } = useHoleScene()
 
   return (
-    <View style={styles.container}>
-      <HoleMap />
+    <GlassRoot>
+      <View style={styles.container}>
+        <GlassBlurTarget style={styles.mapTarget}>
+          <HoleMap />
+        </GlassBlurTarget>
 
-      <TopBar
-        variant="glass"
-        center={
-          <Text style={styles.headerReadout}>
-            {`PAR ${currentHole.par} · ${holeYards} YDS`}
-          </Text>
-        }
-        right={
-          <IconAction
-            label="Home"
-            glyph={<HomeIcon color={colors.onSurface} />}
-            onPress={() =>
-              router.canGoBack() ? router.back() : router.replace('/' as never)
-            }
-          />
-        }
-        style={styles.topBarOverlay}
-      />
+        <TopBar
+          variant="glass"
+          center={
+            <Text style={styles.headerReadout}>
+              {`PAR ${currentHole.par} · ${holeYards} YDS`}
+            </Text>
+          }
+          right={
+            <IconAction
+              label="Home"
+              glyph={<HomeIcon color={colors.onSurface} />}
+              onPress={() =>
+                router.canGoBack()
+                  ? router.back()
+                  : router.replace('/' as never)
+              }
+            />
+          }
+          style={styles.topBarOverlay}
+        />
 
-      <HoleMeasurements />
-      <HoleButtonStack />
-      <BottomDrawer />
-      <TeeOverrideDialog />
+        <HoleMeasurements />
+        <HoleButtonStack />
+        <BottomDrawer />
+        <TeeOverrideDialog />
 
-      {locationGranted === false && (
-        <View
-          style={[styles.permWarn, { top: insets.top + 80 + space.lg + 56 }]}
-        >
-          <Text style={styles.permWarnText}>
-            Location permission denied — distances unavailable
-          </Text>
-        </View>
-      )}
-    </View>
+        {locationGranted === false && (
+          <View
+            style={[styles.permWarn, { top: insets.top + 80 + space.lg + 56 }]}
+          >
+            <Text style={styles.permWarnText}>
+              Location permission denied — distances unavailable
+            </Text>
+          </View>
+        )}
+      </View>
+    </GlassRoot>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surfaceLowest },
+
+  // The blur-target wrapper must fill the screen so the map (the frosted
+  // content) lays out exactly as it did before the wrapper existed.
+  mapTarget: { flex: 1 },
 
   topBarOverlay: {
     position: 'absolute',

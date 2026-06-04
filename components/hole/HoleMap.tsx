@@ -51,13 +51,17 @@ import { M_TO_YD } from './units'
 //   2× wider); positive pushes in. Useful range roughly -1 to +0.5.
 // GREEN_ZOOM_ADJUST: same log-2 offset for the "zoom to green" frame.
 //   0 ≈ exact fit of the green polygon; negative pulls back to leave
-//   breathing room around the green ring.
+//   breathing room around the green ring. The large TOPBAR/DRAWER chrome
+//   padding already insets the green heavily, so 0 still leaves room — and it
+//   pushes the camera to ~z19–20, where ESRI's native z20 tiles (MAX_ZOOM=20)
+//   actually render sharp. At -1 the camera sat at ~z18 and never requested
+//   them. Pull toward -0.5 if the green feels too tight.
 const TOPBAR_CHROME = 244
 const DRAWER_CHROME = 272
 const FRAME_SIDE_PAD = 24
 const FRAME_RIGHT_CHROME = 56
 const FRAME_ZOOM_ADJUST = 0
-const GREEN_ZOOM_ADJUST = -1
+const GREEN_ZOOM_ADJUST = 0
 
 // Knobs for Landing Zone planning waypoints (par 4 / par 5 only).
 // LZ_INIT_FRACTIONS: fractions along the tee→green-centroid line at which
@@ -224,6 +228,8 @@ export function HoleMap() {
     ) => {
       if (!frame) return
       const { center, zoom, bearing } = frame
+      // TEMP zoom-verification log — remove once z20 framing is confirmed.
+      console.log(`[zoomcheck] mode=${cameraMode} frameZoom=${zoom.toFixed(2)}`)
       cameraRef.current?.setStop({
         center: [center.lng, center.lat],
         zoom: zoom,

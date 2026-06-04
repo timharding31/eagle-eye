@@ -21,6 +21,7 @@ import {
 } from '@maplibre/maplibre-react-native'
 
 import { Button } from '@/components/Button'
+import { GlassBlurTarget, GlassRoot } from '@/components/GlassSurface'
 import { ScreenShell } from '@/components/ScreenShell'
 import { TopBar } from '@/components/TopBar'
 import {
@@ -183,191 +184,198 @@ export default function FixCourseScreen() {
   const subtitle = `${pending.hint?.name ?? pending.course.name}`.toUpperCase()
 
   return (
-    <View style={styles.container}>
-      <Map
-        key={`fix-${current.num}`}
-        style={styles.map}
-        // TextureView so the glass IconButton's backdrop blur captures the map
-        // (a GLSurfaceView is invisible to the dimezis blur). See HoleMap.tsx.
-        androidView="texture"
-        mapStyle={satelliteStyle}
-        onPress={handleMapPress}
-        onLayout={e => {
-          const { width, height } = e.nativeEvent.layout
-          setMapSize(prev =>
-            prev && prev.width === width && prev.height === height
-              ? prev
-              : { width, height },
-          )
-        }}
-        onDidFinishLoadingMap={() => setIsMapReady(true)}
-        compass={false}
-      >
-        <Camera
-          ref={cameraRef}
-          initialViewState={
-            frame
-              ? {
-                  center: [frame.center.lng, frame.center.lat],
-                  zoom: frame.zoom,
-                  bearing: frame.bearing,
-                }
-              : undefined
-          }
+    <GlassRoot>
+      <View style={styles.container}>
+        <GlassBlurTarget style={styles.map}>
+          <Map
+            key={`fix-${current.num}`}
+            style={styles.map}
+            // TextureView so the glass IconButton's backdrop blur captures the map
+            // (a GLSurfaceView is invisible to the dimezis blur). See HoleMap.tsx.
+            androidView="texture"
+            mapStyle={satelliteStyle}
+            onPress={handleMapPress}
+            onLayout={e => {
+              const { width, height } = e.nativeEvent.layout
+              setMapSize(prev =>
+                prev && prev.width === width && prev.height === height
+                  ? prev
+                  : { width, height },
+              )
+            }}
+            onDidFinishLoadingMap={() => setIsMapReady(true)}
+            compass={false}
+          >
+            <Camera
+              ref={cameraRef}
+              initialViewState={
+                frame
+                  ? {
+                      center: [frame.center.lng, frame.center.lat],
+                      zoom: frame.zoom,
+                      bearing: frame.bearing,
+                    }
+                  : undefined
+              }
+            />
+
+            {current.holeWay && current.holeWay.length >= 2 && (
+              <GeoJSONSource
+                id="holeway-src"
+                data={{ type: 'LineString', coordinates: current.holeWay }}
+              >
+                <Layer
+                  id="holeway"
+                  type="line"
+                  paint={{
+                    'line-color': colors.primary,
+                    'line-width': 2,
+                    'line-dasharray': [2, 2],
+                    'line-opacity': 0.85,
+                  }}
+                />
+              </GeoJSONSource>
+            )}
+
+            {current.tee && (
+              <GeoJSONSource id="tee-src" data={current.tee}>
+                <Layer
+                  id="tee-dot"
+                  type="circle"
+                  paint={{
+                    'circle-radius': 7,
+                    'circle-color': colors.primary,
+                    'circle-stroke-color': colors.surfaceHighest,
+                    'circle-stroke-width': 2,
+                  }}
+                />
+              </GeoJSONSource>
+            )}
+
+            {currentFix && (
+              <GeoJSONSource
+                id="fix-src"
+                data={{
+                  type: 'Point',
+                  coordinates: [currentFix.lng, currentFix.lat],
+                }}
+              >
+                <Layer
+                  id="fix-dot"
+                  type="circle"
+                  paint={{
+                    'circle-radius': 10,
+                    'circle-color': colors.pinFill,
+                    'circle-stroke-color': colors.primary,
+                    'circle-stroke-width': 3,
+                  }}
+                />
+              </GeoJSONSource>
+            )}
+
+            {current.tee && (
+              <Marker
+                id="tee-label"
+                lngLat={current.tee.coordinates}
+                anchor="bottom"
+              >
+                <View style={styles.markerLabel}>
+                  <Text style={styles.markerLabelText}>TEE</Text>
+                </View>
+              </Marker>
+            )}
+          </Map>
+        </GlassBlurTarget>
+
+        <TopBar
+          title={`HOLE ${current.num} · PAR ${current.par}`}
+          subtitle={subtitle}
+          variant="glass"
+          onBack={handleAbort}
+          style={styles.topBarOverlay}
         />
 
-        {current.holeWay && current.holeWay.length >= 2 && (
-          <GeoJSONSource
-            id="holeway-src"
-            data={{ type: 'LineString', coordinates: current.holeWay }}
-          >
-            <Layer
-              id="holeway"
-              type="line"
-              paint={{
-                'line-color': colors.primary,
-                'line-width': 2,
-                'line-dasharray': [2, 2],
-                'line-opacity': 0.85,
-              }}
-            />
-          </GeoJSONSource>
-        )}
-
-        {current.tee && (
-          <GeoJSONSource id="tee-src" data={current.tee}>
-            <Layer
-              id="tee-dot"
-              type="circle"
-              paint={{
-                'circle-radius': 7,
-                'circle-color': colors.primary,
-                'circle-stroke-color': colors.surfaceHighest,
-                'circle-stroke-width': 2,
-              }}
-            />
-          </GeoJSONSource>
-        )}
-
-        {currentFix && (
-          <GeoJSONSource
-            id="fix-src"
-            data={{
-              type: 'Point',
-              coordinates: [currentFix.lng, currentFix.lat],
-            }}
-          >
-            <Layer
-              id="fix-dot"
-              type="circle"
-              paint={{
-                'circle-radius': 10,
-                'circle-color': colors.pinFill,
-                'circle-stroke-color': colors.primary,
-                'circle-stroke-width': 3,
-              }}
-            />
-          </GeoJSONSource>
-        )}
-
-        {current.tee && (
-          <Marker
-            id="tee-label"
-            lngLat={current.tee.coordinates}
-            anchor="bottom"
-          >
-            <View style={styles.markerLabel}>
-              <Text style={styles.markerLabelText}>TEE</Text>
-            </View>
-          </Marker>
-        )}
-      </Map>
-
-      <TopBar
-        title={`HOLE ${current.num} · PAR ${current.par}`}
-        subtitle={subtitle}
-        variant="glass"
-        onBack={handleAbort}
-        style={styles.topBarOverlay}
-      />
-
-      <View
-        style={[styles.promptCard, { top: insets.top + 80 + space.sm }]}
-        pointerEvents="none"
-      >
-        <Text style={styles.promptTitle}>
-          {currentFix ? 'Green centre set' : 'Tap the green'}
-        </Text>
-        <Text style={styles.promptBody}>
-          {currentFix
-            ? 'Tap again to reposition, or continue to the next hole.'
-            : 'Place a marker on the centre of the green for this hole. Long-press to refine.'}
-        </Text>
-      </View>
-
-      <View
-        style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}
-      >
-        {installError && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{installError}</Text>
-          </View>
-        )}
-
-        <View style={styles.progressRow}>
-          <Text style={styles.progressText}>
-            {fixedCount} of {totalMissing} greens placed
+        <View
+          style={[styles.promptCard, { top: insets.top + 80 + space.sm }]}
+          pointerEvents="none"
+        >
+          <Text style={styles.promptTitle}>
+            {currentFix ? 'Green centre set' : 'Tap the green'}
           </Text>
-          <View style={styles.dotsRow}>
-            {pending.missing.map((m, i) => (
-              <View
-                key={m.num}
+          <Text style={styles.promptBody}>
+            {currentFix
+              ? 'Tap again to reposition, or continue to the next hole.'
+              : 'Place a marker on the centre of the green for this hole. Long-press to refine.'}
+          </Text>
+        </View>
+
+        <View
+          style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}
+        >
+          {installError && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{installError}</Text>
+            </View>
+          )}
+
+          <View style={styles.progressRow}>
+            <Text style={styles.progressText}>
+              {fixedCount} of {totalMissing} greens placed
+            </Text>
+            <View style={styles.dotsRow}>
+              {pending.missing.map((m, i) => (
+                <View
+                  key={m.num}
+                  style={[
+                    styles.dot,
+                    i === cursor && styles.dotActive,
+                    fixes[m.num] && styles.dotFilled,
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.navRow}>
+            <TouchableOpacity
+              style={[styles.navBtn, cursor === 0 && styles.navBtnDisabled]}
+              onPress={handlePrev}
+              disabled={cursor === 0}
+            >
+              <Text style={styles.navBtnText}>‹ PREV</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.navBtnGhost} onPress={handleSkip}>
+              <Text style={styles.navBtnGhostText}>SKIP HOLE</Text>
+            </TouchableOpacity>
+
+            {isLast ? (
+              <TouchableOpacity
                 style={[
-                  styles.dot,
-                  i === cursor && styles.dotActive,
-                  fixes[m.num] && styles.dotFilled,
+                  styles.navBtnPrimary,
+                  installing && styles.navBtnDisabled,
                 ]}
-              />
-            ))}
+                onPress={handleFinish}
+                disabled={installing}
+              >
+                {installing ? (
+                  <ActivityIndicator color={colors.primary} />
+                ) : (
+                  <Text style={styles.navBtnPrimaryText}>INSTALL ›</Text>
+                )}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.navBtnPrimary}
+                onPress={handleNext}
+              >
+                <Text style={styles.navBtnPrimaryText}>NEXT ›</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
-
-        <View style={styles.navRow}>
-          <TouchableOpacity
-            style={[styles.navBtn, cursor === 0 && styles.navBtnDisabled]}
-            onPress={handlePrev}
-            disabled={cursor === 0}
-          >
-            <Text style={styles.navBtnText}>‹ PREV</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.navBtnGhost} onPress={handleSkip}>
-            <Text style={styles.navBtnGhostText}>SKIP HOLE</Text>
-          </TouchableOpacity>
-
-          {isLast ? (
-            <TouchableOpacity
-              style={[
-                styles.navBtnPrimary,
-                installing && styles.navBtnDisabled,
-              ]}
-              onPress={handleFinish}
-              disabled={installing}
-            >
-              {installing ? (
-                <ActivityIndicator color={colors.primary} />
-              ) : (
-                <Text style={styles.navBtnPrimaryText}>INSTALL ›</Text>
-              )}
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.navBtnPrimary} onPress={handleNext}>
-              <Text style={styles.navBtnPrimaryText}>NEXT ›</Text>
-            </TouchableOpacity>
-          )}
-        </View>
       </View>
-    </View>
+    </GlassRoot>
   )
 }
 

@@ -30,7 +30,12 @@ import {
   useIsHydrated,
 } from '@/lib/round'
 import { colors, radius, space, type } from '@/lib/theme'
-import { prefetchForCourse, prefetchStatus } from '@/lib/tiles'
+import {
+  prefetchForCourse,
+  prefetchStatus,
+  retryPrefetch,
+  usePrefetchStatus,
+} from '@/lib/tiles'
 
 export default function HomeScreen() {
   const router = useRouter()
@@ -42,6 +47,7 @@ export default function HomeScreen() {
   // installed courses show up after the Add Course flow.
   const [courses, setCourses] = useState<CourseSummary[]>(listBundledCourses())
   const [busy, setBusy] = useState(false)
+  const [refetching, setRefetching] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
@@ -130,6 +136,33 @@ export default function HomeScreen() {
     } finally {
       setBusy(false)
     }
+  }
+
+  function handleRefetchAll() {
+    if (courses.length === 0) return
+    Alert.alert(
+      'Refetch all imagery?',
+      'Deletes and re-downloads the offline map tiles for every installed course. This can be a large download — best done on Wi-Fi.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Refetch',
+          onPress: async () => {
+            setErr(null)
+            setRefetching(true)
+            try {
+              await Promise.all(
+                courses.map(c => retryPrefetch(c.slug, c.bounds)),
+              )
+            } catch (e) {
+              setErr(String(e))
+            } finally {
+              setRefetching(false)
+            }
+          },
+        },
+      ],
+    )
   }
 
   function handleResume() {
@@ -236,6 +269,7 @@ export default function HomeScreen() {
                       size="md"
                     />
                   </View>
+                  <SatelliteMeter courseId={c.slug} />
                 </Card>
               ))
             )}
@@ -256,6 +290,12 @@ export default function HomeScreen() {
             disabled={busy}
             variant="ghost"
           />
+          <Button
+            label={refetching ? 'Refetching imagery…' : 'Refetch All Imagery'}
+            onPress={handleRefetchAll}
+            disabled={busy || refetching || courses.length === 0}
+            variant="ghost"
+          />
         </View>
 
         {err && (
@@ -265,6 +305,59 @@ export default function HomeScreen() {
         )}
       </ScrollView>
     </ScreenShell>
+  )
+}
+
+// Live satellite-tile download meter for one course. Subscribes to the
+// reactive prefetch store so it animates as OfflineManager fires progress —
+// the ground truth for whether a (re)fetch is actually running.
+function SatelliteMeter({ courseId }: { courseId: string }) {
+  const status = usePrefetchStatus(courseId)
+  const sat = status?.satellite
+  const state = sat?.state ?? 'idle'
+  const pct = Math.round(sat?.percentage ?? 0)
+  const fillPct = state === 'complete' ? 100 : pct
+
+  const label =
+    state === 'complete'
+      ? 'Satellite imagery ready'
+      : state === 'downloading'
+        ? 'Downloading satellite imagery…'
+        : state === 'error'
+          ? 'Imagery download failed'
+          : 'Satellite imagery not downloaded'
+
+  const fillColor =
+    state === 'complete'
+      ? colors.fairwayGreen
+      : state === 'error'
+        ? colors.error
+        : colors.goldenEagle
+
+  return (
+    <View style={styles.meterWrap}>
+      <View style={styles.meterRow}>
+        <Text style={styles.meterLabel} numberOfLines={1}>
+          {label}
+        </Text>
+        {(state === 'downloading' || state === 'error') && (
+          <Text style={styles.meterPct}>{pct}%</Text>
+        )}
+      </View>
+      <View style={styles.meterTrack}>
+        <View
+          style={[
+            styles.meterFill,
+            { width: `${fillPct}%`, backgroundColor: fillColor },
+          ]}
+        />
+      </View>
+      {state === 'error' && sat?.errorMessage ? (
+        <Text style={styles.meterError} numberOfLines={2}>
+          {sat.errorMessage}
+        </Text>
+      ) : null}
+    </View>
   )
 }
 
@@ -318,6 +411,28 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceMuted,
     marginTop: 2,
   },
+
+  meterWrap: { gap: 5, marginTop: space.xs },
+  meterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  meterLabel: { ...type.labelXs, color: colors.onSurfaceVariant, flex: 1 },
+  meterPct: {
+    ...type.labelXs,
+    color: colors.onSurfaceVariant,
+    fontVariant: ['tabular-nums'],
+    marginLeft: space.sm,
+  },
+  meterTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.surfaceHigh,
+    overflow: 'hidden',
+  },
+  meterFill: { height: '100%', borderRadius: 3 },
+  meterError: { ...type.labelXs, color: colors.error, marginTop: 2 },
 
   dim: { ...type.bodyMd, color: colors.onSurfaceMuted, textAlign: 'center' },
 
