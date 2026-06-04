@@ -65,8 +65,10 @@ export function GlassBlurTarget({
 // border/radius) to frost it without restructuring that component.
 export function GlassBackdrop({
   intensity = GLASS_BLUR_INTENSITY,
+  dark = false,
 }: {
   intensity?: number
+  dark?: boolean
 }) {
   const blurTarget = useContext(BlurTargetContext)
   // The blurred map first, then the navy fill layered *over* it. BlurView
@@ -82,7 +84,10 @@ export function GlassBackdrop({
         blurTarget={blurTarget ?? undefined}
         style={StyleSheet.absoluteFill}
       />
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, fill.fill]} />
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, fill.fill, dark && fill.fillDark]}
+      />
     </>
   )
 }
@@ -108,6 +113,9 @@ export function GlassSurface({
 
 const fill = StyleSheet.create({
   fill: { backgroundColor: colors.glassFill },
+  fillDark: {
+    // backgroundColor: colors.glassFillDark,
+  },
 })
 
 const styles = StyleSheet.create({

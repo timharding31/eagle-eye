@@ -43,6 +43,22 @@ export function satelliteMaxZoom(courseId: string): number {
 // boundary don't hit missing tiles.
 const BBOX_EXPAND_PCT = 0.07
 
+// Render-side oversampling. ESRI tiles are natively 256 px; declaring a SMALLER
+// tileSize makes MapLibre fetch DEEPER (sharper) tiles for the same camera zoom:
+//   requestedTileZoom ≈ round(cameraZoom + log2(256 / tileSize))
+// At 256 the hole-overview (camera ~z16.5) pulls z16–17, which is coarser than
+// the screen can show → blurry when zoomed out. At 128 the overview pulls z17–18
+// (crisp, ~matches the screen) and zoom-to-green reaches the z21 cap. Each step
+// down is ~4× the tiles drawn per frame — the offline pack already holds every
+// level (it downloads the full MIN_ZOOM..maxZoom pyramid), so this only affects
+// live fetch volume + GPU work, NOT pack size, and needs no refetch.
+// Range hint: 256 (native, soft overview) – 64 (very sharp, 16× tiles). 128 is
+// the sweet spot: overview matches screen resolution without overdrawing.
+// NOTE: applies only to the on-screen render style. The hosted offline style
+// (docs/satellite-style.json) keeps tileSize 256 so the downloader enumerates
+// the pyramid by native zoom.
+const SATELLITE_RENDER_TILE_SIZE = 128
+
 function buildSatelliteStyle(maxzoom: number): StyleSpecification {
   return {
     version: 8,
@@ -50,7 +66,7 @@ function buildSatelliteStyle(maxzoom: number): StyleSpecification {
       esri: {
         type: 'raster',
         tiles: [ESRI_SATELLITE_TILES],
-        tileSize: 256,
+        tileSize: SATELLITE_RENDER_TILE_SIZE,
         attribution: 'Tiles © Esri',
         maxzoom,
       },

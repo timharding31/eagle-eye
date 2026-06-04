@@ -14,6 +14,8 @@ import {
 } from '@maplibre/maplibre-react-native'
 
 import {
+  bboxOf,
+  bearingDeg,
   clampToHoleEnvelope,
   distanceMeters,
   frameForHole,
@@ -61,7 +63,18 @@ const DRAWER_CHROME = 272
 const FRAME_SIDE_PAD = 24
 const FRAME_RIGHT_CHROME = 56
 const FRAME_ZOOM_ADJUST = 0
-const GREEN_ZOOM_ADJUST = -0.5
+const GREEN_ZOOM_ADJUST = -1
+
+// Camera zoom used for the very first mount, before onLayout gives us a real
+// viewport to compute the exact hole frame. Without an explicit initial the
+// camera mounts at the world view (z0) and the satellite source fetches global
+// tiles for an instant before the first reframe — wasteful, and very visible at
+// small render tileSizes (each step down requests deeper, more numerous tiles).
+// Seed a hole-centered view at this zoom instead, so only local tiles ever load;
+// onFrameChange refines to the exact frame the moment mapSize is known. Keep it
+// a touch wider than the real hole frame (~z16.5) so all geometry is visible on
+// the first paint. Range hint: 14 (wider, safer) – 16 (tighter, less churn).
+const HOLE_INIT_FALLBACK_ZOOM = 16
 
 // Knobs for Landing Zone planning waypoints (par 4 / par 5 only).
 // LZ_INIT_FRACTIONS: fractions along the tee→green-centroid line at which
@@ -187,6 +200,17 @@ export function HoleMap() {
     left: FRAME_SIDE_PAD,
     right: FRAME_SIDE_PAD + FRAME_RIGHT_CHROME,
   }
+
+  // Viewport-independent seed for the Camera's first mount — the centre of all
+  // the hole's geometry, oriented tee→green. Used by initialViewState when the
+  // exact frame isn't computable yet (no mapSize), so the camera never sits at
+  // the world view and the satellite source only ever requests local tiles.
+  const initBounds = bboxOf(framePoints)
+  const initCenter: LatLng = {
+    lat: (initBounds[1] + initBounds[3]) / 2,
+    lng: (initBounds[0] + initBounds[2]) / 2,
+  }
+  const initBearing = bearingDeg(teeLL, greenC)
   const baseHoleFrame = mapSize
     ? frameForHole({
         tee: teeLL,
@@ -359,15 +383,17 @@ export function HoleMap() {
     >
       <Camera
         ref={cameraRef}
-        initialViewState={
-          frame
-            ? {
-                center: [frame.center.lng, frame.center.lat],
-                zoom: frame.zoom,
-                bearing: frame.bearing,
-              }
-            : undefined
-        }
+        // Always seed a hole-centered view (exact frame if mapSize is known yet,
+        // else a geometry-centered fallback at HOLE_INIT_FALLBACK_ZOOM). Never
+        // leave this undefined — that mounts the camera at the world view and the
+        // satellite source briefly fetches global tiles before the first reframe.
+        initialViewState={{
+          center: frame
+            ? [frame.center.lng, frame.center.lat]
+            : [initCenter.lng, initCenter.lat],
+          zoom: frame ? frame.zoom : HOLE_INIT_FALLBACK_ZOOM,
+          bearing: frame ? frame.bearing : initBearing,
+        }}
       />
 
       <GeoJSONSource id="green-src" data={currentHole.green}>

@@ -142,7 +142,7 @@ export function IconButton({
         disabled && styles.disabled,
       ]}
     >
-      {variant === 'glass' && <GlassBackdrop />}
+      {variant === 'glass' && <GlassBackdrop dark />}
       {label && (
         <Text
           style={[iconBtnStyles.label, active && iconBtnStyles.labelActive]}
