@@ -84,10 +84,7 @@ export function GlassBackdrop({
         blurTarget={blurTarget ?? undefined}
         style={StyleSheet.absoluteFill}
       />
-      <View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, fill.fill, dark && fill.fillDark]}
-      />
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, fill.fill]} />
     </>
   )
 }
@@ -113,9 +110,6 @@ export function GlassSurface({
 
 const fill = StyleSheet.create({
   fill: { backgroundColor: colors.glassFill },
-  fillDark: {
-    // backgroundColor: colors.glassFillDark,
-  },
 })
 
 const styles = StyleSheet.create({

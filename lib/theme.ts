@@ -124,8 +124,7 @@ export const colors = {
   // text stays legible while the frosted map still shows through. Lower than
   // `glass`/`glassSoft` because the blur itself carries most of the occlusion.
   // [alpha 0.30–0.55] — raise if numbers wash out over bright fairway.
-  // glassFill: toRgba(_surface, 0.48),
-  glassFill: toRgba(shade(_surface, -0.059), 0.62),
+  glassFill: toRgba(shade(_surface, 0), 0.72),
 } as const
 
 export const space = {
