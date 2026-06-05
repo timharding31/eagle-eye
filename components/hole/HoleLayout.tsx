@@ -1,9 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
-import { HomeIcon } from 'lucide-react-native'
 
-import { IconAction, TopBar } from '@/components/TopBar'
 import { GlassBlurTarget, GlassRoot } from '@/components/GlassSurface'
 import { colors, space, radius, type } from '@/lib/theme'
 
@@ -13,6 +10,7 @@ import { HoleMeasurements } from './HoleMeasurements'
 import { HoleButtonStack } from './HoleButtonStack'
 import { BottomDrawer } from './BottomDrawer'
 import { TeeOverrideDialog } from './TeeOverrideDialog'
+import { HoleHeader } from './HoleHeader'
 
 // The full-screen hole view: the map under glass chrome (TopBar, the F/G/P
 // measurements, the control button stack) with the hole-nav drawer pinned to
@@ -20,8 +18,7 @@ import { TeeOverrideDialog } from './TeeOverrideDialog'
 // is purely composition.
 export function HoleLayout() {
   const insets = useSafeAreaInsets()
-  const router = useRouter()
-  const { currentHole, holeYards, locationGranted } = useHoleScene()
+  const { locationGranted } = useHoleScene()
 
   return (
     <GlassRoot>
@@ -30,26 +27,7 @@ export function HoleLayout() {
           <HoleMap />
         </GlassBlurTarget>
 
-        <TopBar
-          variant="glass"
-          center={
-            <Text style={styles.headerReadout}>
-              {`PAR ${currentHole.par} · ${holeYards} YDS`}
-            </Text>
-          }
-          right={
-            <IconAction
-              label="Home"
-              glyph={<HomeIcon color={colors.onSurface} />}
-              onPress={() =>
-                router.canGoBack()
-                  ? router.back()
-                  : router.replace('/' as never)
-              }
-            />
-          }
-          style={styles.topBarOverlay}
-        />
+        <HoleHeader />
 
         <HoleMeasurements />
         <HoleButtonStack />
@@ -76,24 +54,6 @@ const styles = StyleSheet.create({
   // The blur-target wrapper must fill the screen so the map (the frosted
   // content) lays out exactly as it did before the wrapper existed.
   mapTarget: { flex: 1 },
-
-  topBarOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-
-  // Centered top readout: the hole's par + playing length. The hole number
-  // lives in the bottom drawer, so it's dropped here to keep this minimal.
-  headerReadout: {
-    fontFamily: 'Sora_600SemiBold',
-    fontSize: 16,
-    letterSpacing: 1,
-    paddingLeft: 48,
-    color: colors.onSurface,
-    fontVariant: ['tabular-nums'],
-  },
 
   permWarn: {
     position: 'absolute',

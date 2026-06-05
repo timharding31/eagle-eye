@@ -114,7 +114,6 @@ export function BottomDrawer() {
             expanded ? 'Close hole selector' : 'Open hole selector'
           }
         >
-          <Text style={drawer.navCenterLabel}>HOLE</Text>
           <View style={drawer.navCenterRow}>
             <Text style={drawer.navCenterNum}>{currentHole.num}</Text>
           </View>

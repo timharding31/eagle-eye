@@ -8,12 +8,7 @@ import {
   projectionFraction,
 } from '@/lib/geo'
 import { colors, space, shadows } from '@/lib/theme'
-import {
-  FlagIcon,
-  GolfTeeIcon,
-  GreenBackIcon,
-  GreenFrontIcon,
-} from '@/components/icons'
+import { GolfTeeIcon, GreenBackIcon, GreenFrontIcon } from '@/components/icons'
 import { GlassSurface } from '@/components/GlassSurface'
 
 import { useHoleScene } from './scene'
@@ -73,7 +68,7 @@ export function HoleMeasurements() {
 
   // Position the stack just under the glass TopBar (insets.top + ~64 bar +
   // small gap). Right-aligned so the narrower tee pill hugs the same edge.
-  const floatingTop = insets.top + 72
+  const floatingTop = insets.top + 80
 
   return (
     <View
@@ -115,13 +110,11 @@ function TeeDistancePanel({ meters }: { meters: number }) {
 }
 
 function FpbCell({
-  label = null,
   value,
   primary,
   front,
   back,
 }: {
-  label?: string | null
   value: number | undefined
   primary?: boolean
   back?: boolean
@@ -149,7 +142,7 @@ function FpbCell({
 }
 
 function fmtYds(yds: number | null) {
-  if (yds == null) return '--'
+  if (yds == null) return '---'
   if (yds < 1e3) return String(yds)
   return (yds / 1e3).toFixed(0) + 'K'
 }
@@ -179,8 +172,9 @@ const fpb = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: space.sm,
+    gap: space.xs,
     paddingVertical: 2,
+    minWidth: 72,
   },
   divider: {
     height: StyleSheet.hairlineWidth,

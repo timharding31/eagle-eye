@@ -1,5 +1,6 @@
 import { ReactNode } from 'react'
 import {
+  DimensionValue,
   StyleSheet,
   Text,
   TextStyle,
@@ -98,7 +99,7 @@ const variantLabel: Record<Variant, TextStyle> = {
   danger: { color: colors.primary, fontSize: 17 },
 }
 
-interface IconButtonProps {
+interface IconButtonBaseProps {
   glyph: string | React.ReactElement
   onPress: () => void
   label?: string
@@ -109,16 +110,29 @@ interface IconButtonProps {
   // glyph color, so tint it to match when active.
   active?: boolean
   disabled?: boolean
+  // For variant="glass" only: the backdrop fill weight. Default (true) is the
+  // solid instrument look used by the in-round control stack; pass false for
+  // the lighter, more recessive glass used by top-chrome controls.
+  dark?: boolean
 }
+
+type IconButtonProps = IconButtonBaseProps &
+  (
+    | { size?: number; width?: never; height?: never }
+    | { size?: never; width: DimensionValue; height: DimensionValue }
+  )
 
 export function IconButton({
   glyph,
   onPress,
   label,
-  size = 56,
+  size,
   variant = 'primary',
   active,
   disabled,
+  dark = true,
+  width,
+  height,
 }: IconButtonProps) {
   return (
     <TouchableOpacity
@@ -128,8 +142,8 @@ export function IconButton({
       activeOpacity={0.85}
       style={[
         iconBtnStyles.base,
-        typeof size === 'number' && size > 56 && iconBtnStyles.large,
-        { width: size, height: 'auto' },
+        typeof size === 'number' && (size ?? width) > 56 && iconBtnStyles.large,
+        width ? { width, height } : { width: size ?? 56, height: 'auto' },
         (
           {
             primary: '',
@@ -142,7 +156,7 @@ export function IconButton({
         disabled && styles.disabled,
       ]}
     >
-      {variant === 'glass' && <GlassBackdrop dark />}
+      {variant === 'glass' && <GlassBackdrop dark={dark} />}
       {label && (
         <Text
           style={[iconBtnStyles.label, active && iconBtnStyles.labelActive]}

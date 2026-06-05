@@ -182,18 +182,23 @@ export function HoleSceneProvider({
   const isLastHole = holeNum === lastHoleNum
   const canAdvance = !!nextHole || isLastHole
 
+  // Hole changes update the [hole] route param IN PLACE via setParams rather
+  // than replace()-ing to a new route. A replace tears down this screen and
+  // mounts a fresh one (new HoleSceneProvider → new HoleMap), which snaps the
+  // map; setParams keeps the screen — and the live map instance — mounted so
+  // the camera can ease to the next hole. The URL still reflects the hole.
   const goPrev = () => {
-    if (prevHole) router.replace(`/round/${prevHole.num}` as never)
+    if (prevHole) router.setParams({ hole: String(prevHole.num) })
   }
   const goNext = () => {
     if (nextHole) {
-      router.replace(`/round/${nextHole.num}` as never)
+      router.setParams({ hole: String(nextHole.num) })
     } else if (isLastHole) {
       router.push('/round/scorecard' as never)
     }
   }
   const selectHole = (num: number) => {
-    if (num !== holeNum) router.replace(`/round/${num}` as never)
+    if (num !== holeNum) router.setParams({ hole: String(num) })
   }
 
   const toggleCameraMode = () =>

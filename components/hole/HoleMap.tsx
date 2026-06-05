@@ -58,8 +58,8 @@ import { M_TO_YD } from './units'
 //   pushes the camera to ~z19–20, where ESRI's native z20 tiles (MAX_ZOOM=20)
 //   actually render sharp. At -1 the camera sat at ~z18 and never requested
 //   them. Pull toward -0.5 if the green feels too tight.
-const TOPBAR_CHROME = 244
-const DRAWER_CHROME = 272
+const TOPBAR_CHROME = 235
+const DRAWER_CHROME = 265
 const FRAME_SIDE_PAD = 24
 const FRAME_RIGHT_CHROME = 56
 const FRAME_ZOOM_ADJUST = 0
@@ -75,6 +75,13 @@ const GREEN_ZOOM_ADJUST = -1
 // a touch wider than the real hole frame (~z16.5) so all geometry is visible on
 // the first paint. Range hint: 14 (wider, safer) – 16 (tighter, less churn).
 const HOLE_INIT_FALLBACK_ZOOM = 16
+
+// Duration (ms) of the smooth camera ease for automatic (non-drag) reframes:
+// hole-to-hole navigation and the hole ↔ zoom-to-green toggle. The first paint
+// of a fresh map instance still snaps. Range hint: 300 (snappy) – 700
+// (languid). 'ease' is an ease-in-out; 'fly' would arc out-and-in — fine for a
+// long hole jump, too dramatic for the green toggle, so we keep 'ease'.
+const CAMERA_ANIM_MS = 450
 
 // Knobs for Landing Zone planning waypoints (par 4 / par 5 only).
 // LZ_INIT_FRACTIONS: fractions along the tee→green-centroid line at which
@@ -148,12 +155,15 @@ export function HoleMap() {
     height: number
   } | null>(null)
 
-  // The Map's `key` changes per hole/layer, so it fully remounts. Camera
-  // commands (setStop/easeTo) issued before the native MapView finishes
-  // attaching resolve to a null reactTag and throw. Gate them on
-  // onDidFinishLoadingMap, and reset readiness in render whenever the
-  // key is about to change so the effect can't race the remount.
-  const mapInstanceKey = `${holeNum}-${mapLayer}`
+  // The Map's `key` changes per tile *layer* (satellite ↔ vector) only, so it
+  // remounts on a layer swap but PERSISTS across hole changes — that lets the
+  // camera ease to the next hole instead of snapping after a fresh mount. (The
+  // hole's geometry, markers, and LZ state all update via props, so no remount
+  // is needed to switch holes.) Camera commands (setStop/easeTo) issued before
+  // the native MapView finishes attaching resolve to a null reactTag and throw,
+  // so gate them on onDidFinishLoadingMap, and reset readiness in render
+  // whenever the key is about to change so the effect can't race the remount.
+  const mapInstanceKey = mapLayer
   const [trackedMapKey, setTrackedMapKey] = useState(mapInstanceKey)
   const [isMapReady, setIsMapReady] = useState(false)
   if (trackedMapKey !== mapInstanceKey) {
@@ -249,6 +259,7 @@ export function HoleMap() {
         zoom: number
         bearing: number
       } | null,
+      animated: boolean,
     ) => {
       if (!frame) return
       const { center, zoom, bearing } = frame
@@ -258,17 +269,28 @@ export function HoleMap() {
         center: [center.lng, center.lat],
         zoom: zoom,
         bearing: bearing,
+        // Animate only the camera-view toggle; a duration-less setStop snaps.
+        ...(animated ? { duration: CAMERA_ANIM_MS, easing: 'fly' } : {}),
       })
     },
   )
+
+  // The map key of the last *applied* frame. The first frame on a fresh map
+  // instance snaps; every reframe after that on the same instance (hole nav,
+  // camera-view toggle, layout resize) eases. Updated only when a frame is
+  // actually applied, so a null-frame pass (no mapSize yet) doesn't count as
+  // the first paint and let the real first paint animate from the fallback.
+  const lastFramedKeyRef = useRef<string | null>(null)
 
   // Re-frame only on the events that should move the camera: map ready,
   // hole change, camera-mode toggle, and first/changed layout. Deliberately
   // NOT keyed on frame values — a tee correction shifts the frame center but
   // must not yank the camera (the corrected tee marker just slides over).
   useEffect(() => {
-    if (!isMapReady) return
-    onFrameChange(frame)
+    if (!isMapReady || !frame) return
+    const animated = lastFramedKeyRef.current === mapInstanceKey
+    lastFramedKeyRef.current = mapInstanceKey
+    onFrameChange(frame, animated)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMapReady, holeNum, cameraMode, mapSize?.width, mapSize?.height])
 
@@ -365,7 +387,7 @@ export function HoleMap() {
 
   return (
     <Map
-      key={`map-${holeNum}-${mapLayer}`}
+      key={`map-${mapLayer}`}
       style={styles.map}
       // Render to a TextureView (not the default GLSurfaceView). A SurfaceView
       // punches its own window and is invisible to the dimezis backdrop blur —

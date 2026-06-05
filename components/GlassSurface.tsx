@@ -1,5 +1,5 @@
 import { createContext, ReactNode, RefObject, useContext, useRef } from 'react'
-import { StyleSheet, View, ViewStyle } from 'react-native'
+import { StyleSheet, View, ViewProps, ViewStyle } from 'react-native'
 import { BlurView, BlurTargetView } from 'expo-blur'
 
 import { colors, radius } from '@/lib/theme'
@@ -65,7 +65,7 @@ export function GlassBlurTarget({
 // border/radius) to frost it without restructuring that component.
 export function GlassBackdrop({
   intensity = GLASS_BLUR_INTENSITY,
-  dark = false,
+  dark = true,
 }: {
   intensity?: number
   dark?: boolean
@@ -84,7 +84,10 @@ export function GlassBackdrop({
         blurTarget={blurTarget ?? undefined}
         style={StyleSheet.absoluteFill}
       />
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, fill.fill]} />
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, dark ? fill.fillDark : fill.fill]}
+      />
     </>
   )
 }
@@ -95,14 +98,21 @@ export function GlassSurface({
   children,
   style,
   rounded = radius.md,
+  pointerEvents = 'auto',
+  dark = true,
 }: {
   children?: ReactNode
   style?: ViewStyle | ViewStyle[]
   rounded?: number
+  pointerEvents?: ViewProps['pointerEvents']
+  dark?: boolean
 }) {
   return (
-    <View style={[styles.surface, { borderRadius: rounded }, style]}>
-      <GlassBackdrop />
+    <View
+      style={[styles.surface, { borderRadius: rounded }, style]}
+      pointerEvents={pointerEvents}
+    >
+      <GlassBackdrop dark={dark} />
       {children}
     </View>
   )
@@ -110,6 +120,7 @@ export function GlassSurface({
 
 const fill = StyleSheet.create({
   fill: { backgroundColor: colors.glassFill },
+  fillDark: { backgroundColor: colors.glassFillDark },
 })
 
 const styles = StyleSheet.create({
