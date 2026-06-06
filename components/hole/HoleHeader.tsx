@@ -32,8 +32,8 @@ export function HoleHeader() {
       <IconButton
         glyph={
           <ArrowLeftCircleIcon
-            width={24}
-            height={24}
+            width={26}
+            height={26}
             color={colors.onSurface}
           />
         }

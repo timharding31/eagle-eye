@@ -21,9 +21,12 @@ import {
 } from '@maplibre/maplibre-react-native'
 
 import { Button } from '@/components/Button'
-import { GlassBlurTarget, GlassRoot } from '@/components/GlassSurface'
-import { ScreenShell } from '@/components/ScreenShell'
-import { TopBar } from '@/components/TopBar'
+import { GlassHeader } from '@/components/GlassHeader'
+import {
+  GlassBlurTarget,
+  GlassRoot,
+  GlassSurface,
+} from '@/components/GlassSurface'
 import {
   applyMissingFixes,
   clearPendingInstall,
@@ -171,12 +174,10 @@ export default function FixCourseScreen() {
     // No missing holes → shouldn't usually land here, but defensively
     // install whatever course we have.
     return (
-      <ScreenShell>
-        <View style={styles.center}>
-          <Text style={styles.centerText}>No holes need fixing.</Text>
-          <Button label="Install" onPress={handleFinish} />
-        </View>
-      </ScreenShell>
+      <View style={styles.center}>
+        <Text style={styles.centerText}>No holes need fixing.</Text>
+        <Button label="Install" onPress={handleFinish} />
+      </View>
     )
   }
 
@@ -287,17 +288,18 @@ export default function FixCourseScreen() {
           </Map>
         </GlassBlurTarget>
 
-        <TopBar
-          title={`HOLE ${current.num} · PAR ${current.par}`}
-          subtitle={subtitle}
-          variant="glass"
-          onBack={handleAbort}
-          style={styles.topBarOverlay}
-        />
+        <View style={styles.headerOverlay} pointerEvents="box-none">
+          <GlassHeader
+            onBack={handleAbort}
+            title={`HOLE ${current.num} · PAR ${current.par}`}
+            subtitle={subtitle}
+          />
+        </View>
 
-        <View
-          style={[styles.promptCard, { top: insets.top + 80 + space.sm }]}
+        <GlassSurface
+          rounded={radius.lg}
           pointerEvents="none"
+          style={[styles.promptCard, { top: insets.top + 80 + space.sm }]}
         >
           <Text style={styles.promptTitle}>
             {currentFix ? 'Green centre set' : 'Tap the green'}
@@ -307,9 +309,10 @@ export default function FixCourseScreen() {
               ? 'Tap again to reposition, or continue to the next hole.'
               : 'Place a marker on the centre of the green for this hole. Long-press to refine.'}
           </Text>
-        </View>
+        </GlassSurface>
 
-        <View
+        <GlassSurface
+          rounded={radius['2xl']}
           style={[styles.footer, { paddingBottom: insets.bottom + space.md }]}
         >
           {installError && (
@@ -373,7 +376,7 @@ export default function FixCourseScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </View>
+        </GlassSurface>
       </View>
     </GlassRoot>
   )
@@ -446,7 +449,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surfaceLowest },
   map: { flex: 1 },
 
-  topBarOverlay: {
+  headerOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -457,11 +460,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: space.md,
     right: space.md,
-    backgroundColor: colors.glass,
     padding: space.md,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.outlineVariant,
     gap: 2,
   },
   promptTitle: {
@@ -497,13 +496,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: colors.surfaceHighest,
-    borderTopLeftRadius: radius['2xl'],
-    borderTopRightRadius: radius['2xl'],
     paddingHorizontal: space.marginMobile,
     paddingTop: space.md,
     gap: space.sm,
-    ...shadows.drawer,
   },
   progressRow: {
     flexDirection: 'row',

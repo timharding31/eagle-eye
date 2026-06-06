@@ -34,7 +34,7 @@ Built solo, for one golfer's bag, with the discipline of something much bigger.
 
 📍 **Find Nearby.** Not at one of the bundled courses? Discover and install nearby courses straight from OpenStreetMap, right there in the parking lot.
 
-🎯 **Tee-shot tracking.** A two-tap start→mark flow snapshots your GPS so you can see exactly how far that drive carried.
+🎯 **Distance from Tee, the honest way.** Tap once to snap a hole's tee to where you actually tee off (OSM tee data is often wrong), and a live distance-from-tee readout shows how far you've walked from it — no per-shot tapping.
 
 🔒 **Your data stays yours.** SQLite on the device is the single source of truth for your rounds and installed courses. Nothing leaves the phone.
 
@@ -53,7 +53,7 @@ Eagle Eye ships pre-loaded with five Bay Area courses — **Presidio** (the home
 | State        | Zustand                                                                |
 | Type / style | TypeScript strict mode, in-house design system in `lib/theme.ts`       |
 
-The codebase is organized by **domain concept, not by layer** — deep modules (`geo`, `course`, `round`, `tiles`, `shots`) each expose a single narrow interface, so a bug localizes to one module instead of smearing across the app. There's no test suite by design; the architecture _is_ the debugging aid.
+The codebase is organized by **domain concept, not by layer** — deep modules (`geo`, `course`, `round`, `tiles`) each expose a single narrow interface, so a bug localizes to one module instead of smearing across the app. There's no test suite by design; the architecture _is_ the debugging aid.
 
 ## Getting started
 
@@ -76,6 +76,7 @@ npm run build:course -- way/16650363 presidio  # Overpass → courses/<slug>.jso
 
 ## Where to read more
 
-- **`CONTEXT.md`** — the domain glossary (Course, Hole, Green, Pin, Round, Tee Shot…). These terms are used exactly, in code and docs.
+- **`CONTEXT.md`** — the domain glossary (Course, Hole, Green, Pin, Round, Tee, Landing Zone…). These terms are used exactly, in code and docs.
 - **`docs/PLANNING.md`** — phasing plan, tech-stack rationale, module table, data model, UX flows.
-- **`docs/adr/`** — eight ADRs locking in the non-obvious calls (front/back via closest point, SQLite as source of truth, source-agnostic course data, offline tile packs, and more).
+- **`docs/UI_LAYOUT.md`** — maps the hole-view pixels to the `components/hole/` files that own them.
+- **`docs/adr/`** — ten ADRs locking in the non-obvious calls (front/back via closest point, SQLite as source of truth, source-agnostic course data, offline tile packs, tee corrections, dropping shot recording, and more).

@@ -1,460 +1,58 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
-import { useFocusEffect, useRouter } from 'expo-router'
+import { useEffect, useState } from 'react'
+import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { useRouter } from 'expo-router'
+import * as Location from 'expo-location'
 
-import { Button } from '@/components/Button'
-import { Card } from '@/components/Card'
-import { ScreenShell } from '@/components/ScreenShell'
-import { SectionLabel } from '@/components/SectionLabel'
-import { IconAction, TopBar } from '@/components/TopBar'
-import {
-  listAllCourses,
-  listBundledCourses,
-  removeInstalledCourse,
-  type CourseSummary,
-} from '@/lib/course'
-import {
-  endRound,
-  ensureHydrated,
-  isStale,
-  startRound,
-  useActiveRound,
-  useIsHydrated,
-} from '@/lib/round'
-import { colors, radius, space, type } from '@/lib/theme'
-import {
-  prefetchForCourse,
-  prefetchStatus,
-  retryPrefetch,
-  usePrefetchStatus,
-} from '@/lib/tiles'
+import { MapBackdrop } from '@/components/MapBackdrop'
+import { HomeLayout } from '@/components/home/HomeLayout'
+import { HomeSceneProvider } from '@/components/home/scene'
+import { ensureHydrated, useIsHydrated } from '@/lib/round'
+import { colors } from '@/lib/theme'
 
+// Route loader: hydrate the Round store and clear the location-permission gate,
+// then hand the home screen to its scene provider. All the home behavior lives
+// under components/home (mirrors app/round/[hole].tsx → components/hole).
 export default function HomeScreen() {
   const router = useRouter()
-  const activeRound = useActiveRound()
   const hydrated = useIsHydrated()
-  // Start with the synchronous bundled list so the screen has something
-  // to render immediately; replace with bundled+installed once SQLite
-  // returns. Re-fetched every time the screen regains focus so newly
-  // installed courses show up after the Add Course flow.
-  const [courses, setCourses] = useState<CourseSummary[]>(listBundledCourses())
-  const [busy, setBusy] = useState(false)
-  const [refetching, setRefetching] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
+  const [permChecked, setPermChecked] = useState(false)
 
   useEffect(() => {
-    ensureHydrated().catch(e => setErr(String(e)))
+    ensureHydrated().catch(e => console.error('ensureHydrated', e))
   }, [])
 
-  // Refresh the course list + nudge any missing tile prefetches whenever
-  // the screen regains focus.
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false
-      listAllCourses()
-        .then(list => {
-          if (cancelled) return
-          setCourses(list)
-          for (const c of list) {
-            prefetchStatus(c.slug)
-              .then(() => prefetchForCourse(c.slug, c.bounds))
-              .catch(e => console.error(`tiles prefetch ${c.slug}`, e))
-          }
-        })
-        .catch(e => !cancelled && setErr(String(e)))
-      return () => {
-        cancelled = true
-      }
-    }, []),
-  )
+  // Onboarding gate: with no settings store, lean on the live permission
+  // status — undetermined means we've never asked, so show the landing screen
+  // (which requests it). Granted/denied both skip it.
+  useEffect(() => {
+    Location.getForegroundPermissionsAsync()
+      .then(({ status }) => {
+        if (status === 'undetermined') router.replace('/landing' as never)
+        else setPermChecked(true)
+      })
+      .catch(() => setPermChecked(true))
+  }, [router])
 
-  const stale = useMemo(
-    () => (activeRound ? isStale(activeRound) : false),
-    [activeRound],
-  )
-
-  const activeCourseName = useMemo(() => {
-    if (!activeRound) return null
+  if (!hydrated || !permChecked) {
     return (
-      courses.find(c => c.slug === activeRound.courseId)?.name ??
-      activeRound.courseId
-    )
-  }, [activeRound, courses])
-
-  async function handleStart(slug: string) {
-    setErr(null)
-    setBusy(true)
-    try {
-      const round = await startRound(slug)
-      router.push(`/round/${round.currentHole}` as never)
-    } catch (e) {
-      setErr(String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function handleRemove(c: CourseSummary) {
-    Alert.alert(
-      `Remove ${c.name}?`,
-      'The course will be removed from your device. Saved rounds keep their score history; you can re-add the course later via Find Nearby.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await removeInstalledCourse(c.slug)
-              const list = await listAllCourses()
-              setCourses(list)
-            } catch (e) {
-              setErr(String(e))
-            }
-          },
-        },
-      ],
-    )
-  }
-
-  async function handleEndActive() {
-    if (!activeRound) return
-    setErr(null)
-    setBusy(true)
-    try {
-      await endRound(activeRound.id)
-    } catch (e) {
-      setErr(String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  function handleRefetchAll() {
-    if (courses.length === 0) return
-    Alert.alert(
-      'Refetch all imagery?',
-      'Deletes and re-downloads the offline map tiles for every installed course. This can be a large download — best done on Wi-Fi.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Refetch',
-          onPress: async () => {
-            setErr(null)
-            setRefetching(true)
-            try {
-              await Promise.all(
-                courses.map(c => retryPrefetch(c.slug, c.bounds)),
-              )
-            } catch (e) {
-              setErr(String(e))
-            } finally {
-              setRefetching(false)
-            }
-          },
-        },
-      ],
-    )
-  }
-
-  function handleResume() {
-    if (!activeRound) return
-    router.push(`/round/${activeRound.currentHole}` as never)
-  }
-
-  if (!hydrated) {
-    return (
-      <ScreenShell>
-        <TopBar title="EAGLE EYE" subtitle="GOLF RANGEFINDER" />
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.centerText}>Loading…</Text>
-        </View>
-      </ScreenShell>
+      <View style={styles.root}>
+        <MapBackdrop>
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        </MapBackdrop>
+      </View>
     )
   }
 
   return (
-    <ScreenShell>
-      <TopBar
-        title="EAGLE EYE"
-        subtitle="GOLF RANGEFINDER"
-        right={
-          <IconAction
-            label="History"
-            glyph="≡"
-            onPress={() => router.push('/history' as never)}
-          />
-        }
-      />
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {activeRound && (
-          <View style={styles.section}>
-            {stale && (
-              <View style={styles.staleBanner}>
-                <Text style={styles.staleBannerText}>
-                  This round started over 24 hours ago. End it or resume?
-                </Text>
-              </View>
-            )}
-            <Card variant="elevated" padding="lg" style={styles.resumeCard}>
-              <SectionLabel>ACTIVE ROUND</SectionLabel>
-              <Text style={styles.resumeCourse}>{activeCourseName}</Text>
-              <Text style={styles.resumeMeta}>
-                Hole {activeRound.currentHole} ·{' '}
-                {formatStarted(activeRound.startedAt)}
-              </Text>
-              <View style={styles.resumeActions}>
-                <Button
-                  label="Resume Round"
-                  onPress={handleResume}
-                  disabled={busy}
-                  style={{ flex: 1 }}
-                />
-                <Button
-                  label="End"
-                  variant="ghost"
-                  size="lg"
-                  onPress={handleEndActive}
-                  disabled={busy}
-                />
-              </View>
-            </Card>
-          </View>
-        )}
-
-        {!activeRound && (
-          <View style={styles.section}>
-            <SectionLabel style={styles.sectionHeader}>
-              START A ROUND
-            </SectionLabel>
-            {courses.length === 0 ? (
-              <Text style={styles.dim}>No courses installed yet.</Text>
-            ) : (
-              courses.map(c => (
-                <Card
-                  key={c.slug}
-                  variant="surface"
-                  padding="md"
-                  style={styles.courseCard}
-                >
-                  <View style={styles.courseHead}>
-                    <View style={{ flex: 1 }}>
-                      {c.source !== 'bundled' ? (
-                        <TouchableOpacity
-                          onLongPress={() => handleRemove(c)}
-                          delayLongPress={500}
-                        >
-                          <Text style={styles.courseName}>{c.name}</Text>
-                          <Text style={styles.installedTag}>
-                            INSTALLED · LONG-PRESS TO REMOVE
-                          </Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <Text style={styles.courseName}>{c.name}</Text>
-                      )}
-                    </View>
-                    <Button
-                      label="Start"
-                      onPress={() => handleStart(c.slug)}
-                      disabled={busy}
-                      size="md"
-                    />
-                  </View>
-                  <SatelliteMeter courseId={c.slug} />
-                </Card>
-              ))
-            )}
-            <Button
-              label="+ Add Course (Find Nearby)"
-              variant="secondary"
-              onPress={() => router.push('/courses/add' as never)}
-              disabled={busy}
-              style={{ marginTop: space.sm }}
-            />
-          </View>
-        )}
-
-        <View style={[styles.section, { marginTop: space.lg }]}>
-          <Button
-            label="Round History"
-            onPress={() => router.push('/history' as never)}
-            disabled={busy}
-            variant="ghost"
-          />
-          <Button
-            label={refetching ? 'Refetching imagery…' : 'Refetch All Imagery'}
-            onPress={handleRefetchAll}
-            disabled={busy || refetching || courses.length === 0}
-            variant="ghost"
-          />
-        </View>
-
-        {err && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{err}</Text>
-          </View>
-        )}
-      </ScrollView>
-    </ScreenShell>
+    <HomeSceneProvider>
+      <HomeLayout />
+    </HomeSceneProvider>
   )
-}
-
-// Live satellite-tile download meter for one course. Subscribes to the
-// reactive prefetch store so it animates as OfflineManager fires progress —
-// the ground truth for whether a (re)fetch is actually running.
-function SatelliteMeter({ courseId }: { courseId: string }) {
-  const status = usePrefetchStatus(courseId)
-  const sat = status?.satellite
-  const state = sat?.state ?? 'idle'
-  const pct = Math.round(sat?.percentage ?? 0)
-  const fillPct = state === 'complete' ? 100 : pct
-
-  const label =
-    state === 'complete'
-      ? 'Satellite imagery ready'
-      : state === 'downloading'
-        ? 'Downloading satellite imagery…'
-        : state === 'error'
-          ? 'Imagery download failed'
-          : 'Satellite imagery not downloaded'
-
-  const fillColor =
-    state === 'complete'
-      ? colors.fairwayGreen
-      : state === 'error'
-        ? colors.error
-        : colors.goldenEagle
-
-  return (
-    <View style={styles.meterWrap}>
-      <View style={styles.meterRow}>
-        <Text style={styles.meterLabel} numberOfLines={1}>
-          {label}
-        </Text>
-        {(state === 'downloading' || state === 'error') && (
-          <Text style={styles.meterPct}>{pct}%</Text>
-        )}
-      </View>
-      <View style={styles.meterTrack}>
-        <View
-          style={[
-            styles.meterFill,
-            { width: `${fillPct}%`, backgroundColor: fillColor },
-          ]}
-        />
-      </View>
-      {state === 'error' && sat?.errorMessage ? (
-        <Text style={styles.meterError} numberOfLines={2}>
-          {sat.errorMessage}
-        </Text>
-      ) : null}
-    </View>
-  )
-}
-
-function formatStarted(ts: number): string {
-  const d = new Date(ts)
-  const now = Date.now()
-  const diffMs = now - ts
-  const oneDay = 24 * 60 * 60 * 1000
-  if (diffMs < oneDay) {
-    return d.toLocaleTimeString(undefined, {
-      hour: 'numeric',
-      minute: '2-digit',
-    })
-  }
-  return d.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  })
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: space.marginMobile, gap: space.md },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.md,
-  },
-  centerText: { ...type.bodyMd, color: colors.onSurfaceVariant },
-  section: { gap: space.sm },
-  sectionHeader: { marginBottom: space.xs },
-
-  resumeCard: { gap: space.xs },
-  resumeCourse: { ...type.headlineLg, color: colors.primary, marginTop: 2 },
-  resumeMeta: { ...type.bodyMd, color: colors.onSurfaceVariant },
-  resumeActions: {
-    flexDirection: 'row',
-    gap: space.sm,
-    marginTop: space.md,
-  },
-
-  courseCard: { gap: space.xs },
-  courseHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-  },
-  courseName: { ...type.headlineMd, color: colors.primary },
-  installedTag: {
-    ...type.labelXs,
-    color: colors.onSurfaceMuted,
-    marginTop: 2,
-  },
-
-  meterWrap: { gap: 5, marginTop: space.xs },
-  meterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  meterLabel: { ...type.labelXs, color: colors.onSurfaceVariant, flex: 1 },
-  meterPct: {
-    ...type.labelXs,
-    color: colors.onSurfaceVariant,
-    fontVariant: ['tabular-nums'],
-    marginLeft: space.sm,
-  },
-  meterTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.surfaceHigh,
-    overflow: 'hidden',
-  },
-  meterFill: { height: '100%', borderRadius: 3 },
-  meterError: { ...type.labelXs, color: colors.error, marginTop: 2 },
-
-  dim: { ...type.bodyMd, color: colors.onSurfaceMuted, textAlign: 'center' },
-
-  staleBanner: {
-    backgroundColor: colors.errorContainer,
-    padding: space.md,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.error,
-  },
-  staleBannerText: {
-    color: colors.primary,
-    fontFamily: 'Sora_600SemiBold',
-    textAlign: 'center',
-  },
-
-  errorBox: {
-    backgroundColor: colors.errorContainer,
-    padding: space.md,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.error,
-  },
-  errorText: { ...type.bodyMd, color: colors.primary },
+  root: { flex: 1, backgroundColor: colors.surfaceLowest },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 })

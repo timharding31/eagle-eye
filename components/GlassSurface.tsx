@@ -15,10 +15,11 @@ import { colors, radius } from '@/lib/theme'
 //     Android, which we never target).
 //   • The SDK-31+ dimezis method does NOT auto-sample the view hierarchy. Each
 //     BlurView must be handed a `blurTarget` ref pointing at a <BlurTargetView>
-//     that wraps the content to frost (the map) — without it the blur silently
-//     falls back to "none". We thread that ref through context: wrap the screen
-//     in <GlassRoot>, wrap the map in <GlassBlurTarget>, and every GlassBackdrop
-//     beneath picks up the target automatically.
+//     that wraps the content to frost — without it the blur silently falls back
+//     to "none". That ref is owned entirely by this module's context: wrap the
+//     screen in <GlassRoot>, wrap the ONE thing to frost in <GlassBlurTarget>
+//     (the live hole map, or the procedural MapBackdrop), and every
+//     GlassBackdrop beneath reads the target from context — no prop drilling.
 //   • A BlurTargetView can only capture content that is part of the view
 //     hierarchy. MapLibre's default `androidView="surface"` (GLSurfaceView) is
 //     NOT captured — the map must be mounted with `androidView="texture"` for
@@ -94,25 +95,40 @@ export function GlassBackdrop({
 
 // A complete glass panel: the blurred backdrop plus the border/highlight/clip
 // chrome. Lay content as children; pass padding/min-size/shadow via `style`.
+//
+// `blur` (default true) controls whether the live backdrop blur renders. It
+// frosts whatever the nearest <GlassBlurTarget> wraps (the hole map, or the
+// procedural MapBackdrop) — picked up from context, never passed in. Pass
+// blur={false} only for a glass panel that floats over no blur target (a plain
+// surface), where it falls back to the translucent fill alone.
 export function GlassSurface({
   children,
   style,
   rounded = radius.md,
   pointerEvents = 'auto',
   dark = true,
+  blur = true,
 }: {
   children?: ReactNode
   style?: ViewStyle | ViewStyle[]
   rounded?: number
   pointerEvents?: ViewProps['pointerEvents']
   dark?: boolean
+  blur?: boolean
 }) {
   return (
     <View
       style={[styles.surface, { borderRadius: rounded }, style]}
       pointerEvents={pointerEvents}
     >
-      <GlassBackdrop dark={dark} />
+      {blur ? (
+        <GlassBackdrop dark={dark} />
+      ) : (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, dark ? fill.fillDark : fill.fill]}
+        />
+      )}
       {children}
     </View>
   )

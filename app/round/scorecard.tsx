@@ -12,10 +12,10 @@ import {
 import { useRouter } from 'expo-router'
 
 import { Button } from '@/components/Button'
-import { Card } from '@/components/Card'
-import { ScreenShell } from '@/components/ScreenShell'
+import { GlassHeader } from '@/components/GlassHeader'
+import { GlassSurface } from '@/components/GlassSurface'
+import { MapBackdrop } from '@/components/MapBackdrop'
 import { SectionLabel } from '@/components/SectionLabel'
-import { TopBar } from '@/components/TopBar'
 import { loadCourse, type Course } from '@/lib/course'
 import {
   endRound,
@@ -121,81 +121,96 @@ export default function ScorecardScreen() {
     enteredCount === course.holes.length ? total - totalPar : null
 
   return (
-    <ScreenShell>
-      <TopBar
-        title="SCORECARD"
-        subtitle={`${course.name.toUpperCase()}`}
-        onBack={() => router.back()}
-      />
-      <KeyboardAvoidingView
-        style={styles.kav}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
+    <View style={styles.root}>
+      <MapBackdrop>
+        <GlassHeader
+          onBack={() => router.back()}
+          title="SCORECARD"
+          subtitle={course.name.toUpperCase()}
+        />
+        <KeyboardAvoidingView
+          style={styles.kav}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <Card variant="elevated" padding="lg" style={styles.summary}>
-            <SectionLabel>TOTAL</SectionLabel>
-            <Text style={styles.summaryTotal}>
-              {enteredCount === 0 ? '—' : total}
-            </Text>
-            <Text style={styles.summaryPar}>
-              {`/ par ${totalPar}`}
-              {relToPar != null
-                ? relToPar === 0
-                  ? '  (E)'
-                  : `  (${relToPar > 0 ? '+' : ''}${relToPar})`
-                : ''}
-            </Text>
-            <Text style={styles.summaryMeta}>
-              {enteredCount} / {course.holes.length} holes entered
-            </Text>
-          </Card>
-
-          <Card variant="surface" padding="md" style={styles.gridCard}>
-            <View style={styles.gridHeader}>
-              <Text style={[styles.gridHeaderCell, styles.cellHole]}>HOLE</Text>
-              <Text style={[styles.gridHeaderCell, styles.cellPar]}>PAR</Text>
-              <Text style={[styles.gridHeaderCell, styles.cellScore]}>
-                SCORE
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <GlassSurface
+              dark={false}
+              rounded={radius['2xl']}
+              style={styles.summary}
+            >
+              <SectionLabel textStyle={{ color: colors.onSurface }}>
+                TOTAL
+              </SectionLabel>
+              <Text style={styles.summaryTotal}>
+                {enteredCount === 0 ? '—' : total}
               </Text>
-            </View>
+              <Text style={styles.summaryPar}>
+                {`/ par ${totalPar}`}
+                {relToPar != null
+                  ? relToPar === 0
+                    ? '  (E)'
+                    : `  (${relToPar > 0 ? '+' : ''}${relToPar})`
+                  : ''}
+              </Text>
+              <Text style={styles.summaryMeta}>
+                {enteredCount} / {course.holes.length} holes entered
+              </Text>
+            </GlassSurface>
 
-            {course.holes.map((h, i) => (
-              <ScoreRow
-                key={h.num}
-                holeNum={h.num}
-                par={h.par}
-                value={scores[h.num] ?? ''}
-                onChange={v => handleScoreChange(h.num, v)}
-                divider={i < course.holes.length - 1}
-              />
-            ))}
-          </Card>
+            <GlassSurface rounded={radius['2xl']} style={styles.gridCard}>
+              <View style={styles.gridHeader}>
+                <Text style={[styles.gridHeaderCell, styles.cellHole]}>
+                  HOLE
+                </Text>
+                <Text style={[styles.gridHeaderCell, styles.cellPar]}>PAR</Text>
+                <Text style={[styles.gridHeaderCell, styles.cellScore]}>
+                  SCORE
+                </Text>
+              </View>
 
-          {saveError && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{saveError}</Text>
-            </View>
-          )}
+              {course.holes.map((h, i) => (
+                <ScoreRow
+                  key={h.num}
+                  holeNum={h.num}
+                  par={h.par}
+                  value={scores[h.num] ?? ''}
+                  onChange={v => handleScoreChange(h.num, v)}
+                  divider={i < course.holes.length - 1}
+                />
+              ))}
+            </GlassSurface>
 
-          <Button
-            label={saving ? 'Saving…' : 'Save & End Round'}
-            onPress={handleSave}
-            disabled={saving}
-            style={{ marginTop: space.md }}
-          />
-          <Button
-            label="Back to round"
-            variant="ghost"
-            size="md"
-            onPress={() => router.back()}
-            disabled={saving}
-          />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </ScreenShell>
+            {saveError && (
+              <GlassSurface
+                rounded={radius.lg}
+                style={styles.errorBox}
+                dark={false}
+              >
+                <Text style={styles.errorText}>{saveError}</Text>
+              </GlassSurface>
+            )}
+
+            <Button
+              label={saving ? 'Saving…' : 'Save & End Round'}
+              onPress={handleSave}
+              disabled={saving}
+              style={{ marginTop: space.md }}
+            />
+            <Button
+              label="Back to round"
+              variant="ghost"
+              size="md"
+              onPress={() => router.back()}
+              disabled={saving}
+            />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </MapBackdrop>
+    </View>
   )
 }
 
@@ -234,36 +249,42 @@ function ScoreRow({
 
 function CenterMessage({ text, busy }: { text: string; busy?: boolean }) {
   return (
-    <ScreenShell>
-      <View style={styles.centerMsg}>
-        {busy ? <ActivityIndicator color={colors.primary} /> : null}
-        <Text style={styles.centerMsgText}>{text}</Text>
-      </View>
-    </ScreenShell>
+    <View style={styles.root}>
+      <MapBackdrop>
+        <View style={styles.centerMsg}>
+          {busy ? <ActivityIndicator color={colors.primary} /> : null}
+          <Text style={styles.centerMsgText}>{text}</Text>
+        </View>
+      </MapBackdrop>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.surfaceLowest },
   kav: { flex: 1 },
-  scroll: { padding: space.marginMobile, gap: space.sm },
+  scroll: {
+    padding: space.marginMobile,
+    paddingTop: space.md,
+    gap: space.sm,
+  },
 
-  summary: { alignItems: 'center', gap: space.xs },
+  summary: { padding: space.lg, alignItems: 'center', gap: space.xs },
   summaryTotal: {
     ...type.displayHero,
     color: colors.primary,
     marginTop: space.xs,
   },
-  summaryPar: { ...type.bodyLg, color: colors.onSurfaceVariant },
+  summaryPar: { ...type.bodyLg, color: colors.onSurface },
   summaryMeta: { ...type.bodyMd, color: colors.onSurfaceMuted },
 
-  gridCard: { padding: 0, overflow: 'hidden' },
+  gridCard: { overflow: 'hidden' },
   gridHeader: {
     flexDirection: 'row',
     paddingVertical: space.sm,
     paddingHorizontal: space.md,
-    backgroundColor: colors.surfaceLowest,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.outlineVariant,
   },
   gridHeaderCell: { ...type.labelXs },
   gridRow: {
@@ -298,15 +319,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.outlineVariant,
-    backgroundColor: colors.surfaceLow,
+    backgroundColor: colors.glassFillDark,
     fontVariant: ['tabular-nums'],
   },
 
   errorBox: {
-    backgroundColor: colors.errorContainer,
     padding: space.md,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.error,
     marginTop: space.sm,
   },
@@ -318,7 +336,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
     gap: 12,
-    backgroundColor: colors.surface,
   },
-  centerMsgText: { ...type.bodyMd, textAlign: 'center' },
+  centerMsgText: {
+    ...type.bodyMd,
+    textAlign: 'center',
+    color: colors.onSurface,
+  },
 })

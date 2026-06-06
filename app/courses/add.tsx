@@ -11,10 +11,10 @@ import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 
 import { Button } from '@/components/Button'
-import { Card } from '@/components/Card'
-import { ScreenShell } from '@/components/ScreenShell'
+import { GlassHeader } from '@/components/GlassHeader'
+import { GlassSurface } from '@/components/GlassSurface'
+import { MapBackdrop } from '@/components/MapBackdrop'
 import { SectionLabel } from '@/components/SectionLabel'
-import { TopBar } from '@/components/TopBar'
 import {
   fetchCourseFromOverpass,
   findNearby,
@@ -122,125 +122,144 @@ export default function AddCourseScreen() {
   }
 
   return (
-    <ScreenShell>
-      <TopBar
-        title="ADD COURSE"
-        subtitle="FIND NEARBY"
-        onBack={() => router.back()}
-      />
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {phase.kind === 'idle' && (
-          <Card variant="elevated" padding="lg" style={styles.intro}>
-            <SectionLabel>HOW IT WORKS</SectionLabel>
-            <Text style={styles.introBody}>
-              We&apos;ll ask for your location once, then query OpenStreetMap
-              for golf courses within {SEARCH_RADIUS_KM} km. Tap a result to
-              install it for offline play.
-            </Text>
-            <Button
-              label="Find Nearby Courses"
-              onPress={handleSearch}
-              style={{ marginTop: space.md }}
-            />
-          </Card>
-        )}
-
-        {(phase.kind === 'locating' || phase.kind === 'searching') && (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={styles.centerText}>
-              {phase.kind === 'locating'
-                ? 'Getting your location…'
-                : 'Searching OpenStreetMap…'}
-            </Text>
-          </View>
-        )}
-
-        {phase.kind === 'error' && (
-          <View>
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{phase.message}</Text>
-            </View>
-            <Button
-              label="Try Again"
-              variant="secondary"
-              onPress={handleSearch}
-              style={{ marginTop: space.md }}
-            />
-          </View>
-        )}
-
-        {phase.kind === 'results' && (
-          <View style={styles.section}>
-            <SectionLabel style={styles.sectionHeader}>
-              {phase.results.length === 0
-                ? 'NO COURSES FOUND'
-                : `${phase.results.length} COURSE${phase.results.length === 1 ? '' : 'S'} NEARBY`}
-            </SectionLabel>
-            {phase.results.length === 0 ? (
-              <Text style={styles.dim}>
-                No golf courses tagged in OpenStreetMap within{' '}
-                {SEARCH_RADIUS_KM} km. Try moving closer to a course, or
-                contribute the course data to OSM.
+    <View style={styles.root}>
+      <MapBackdrop>
+        <GlassHeader
+          onBack={() => router.back()}
+          title="ADD COURSE"
+          subtitle="FIND NEARBY"
+        />
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
+          {phase.kind === 'idle' && (
+            <GlassSurface
+              dark={false}
+              rounded={radius['2xl']}
+              style={styles.intro}
+            >
+              <SectionLabel textStyle={{ color: colors.onSurface }}>
+                HOW IT WORKS
+              </SectionLabel>
+              <Text style={styles.introBody}>
+                We&apos;ll ask for your location once, then query OpenStreetMap
+                for golf courses within {SEARCH_RADIUS_KM} km. Tap a result to
+                install it for offline play.
               </Text>
-            ) : (
-              phase.results.map(r => {
-                const slug = `osm-${r.osmType}-${r.osmId}`
-                const installed = installedIds.has(slug)
-                const installing = installingId === r.osmId
-                return (
-                  <Card
-                    key={`${r.osmType}-${r.osmId}`}
-                    variant="surface"
-                    padding="md"
-                    style={styles.row}
-                  >
-                    <View style={styles.rowMain}>
-                      <Text style={styles.rowName} numberOfLines={2}>
-                        {r.name}
-                      </Text>
-                      <Text style={styles.rowMeta}>
-                        {distanceLabel(r.distanceM)} away · OSM {r.osmType}{' '}
-                        {r.osmId}
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[
-                        styles.installBtn,
-                        installed && styles.installBtnDone,
-                      ]}
-                      onPress={() => handleInstall(r)}
-                      disabled={installing || !!installingId}
-                    >
-                      {installing ? (
-                        <ActivityIndicator color={colors.primary} />
-                      ) : (
-                        <Text style={styles.installBtnText}>
-                          {installed ? '✓ INSTALLED' : 'INSTALL'}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  </Card>
-                )
-              })
-            )}
-            <Button
-              label="Search Again"
-              variant="ghost"
-              size="md"
-              onPress={handleSearch}
-              style={{ marginTop: space.sm }}
-            />
-          </View>
-        )}
+              <Button
+                label="Find Nearby Courses"
+                onPress={handleSearch}
+                style={{ marginTop: space.md }}
+              />
+            </GlassSurface>
+          )}
 
-        {installError && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{installError}</Text>
-          </View>
-        )}
-      </ScrollView>
-    </ScreenShell>
+          {(phase.kind === 'locating' || phase.kind === 'searching') && (
+            <View style={styles.center}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={styles.centerText}>
+                {phase.kind === 'locating'
+                  ? 'Getting your location…'
+                  : 'Searching OpenStreetMap…'}
+              </Text>
+            </View>
+          )}
+
+          {phase.kind === 'error' && (
+            <View>
+              <GlassSurface
+                rounded={radius.lg}
+                style={styles.errorBox}
+                dark={false}
+              >
+                <Text style={styles.errorText}>{phase.message}</Text>
+              </GlassSurface>
+              <Button
+                label="Try Again"
+                variant="secondary"
+                onPress={handleSearch}
+                style={{ marginTop: space.md }}
+              />
+            </View>
+          )}
+
+          {phase.kind === 'results' && (
+            <View style={styles.section}>
+              <SectionLabel style={styles.sectionHeader}>
+                {phase.results.length === 0
+                  ? 'NO COURSES FOUND'
+                  : `${phase.results.length} COURSE${phase.results.length === 1 ? '' : 'S'} NEARBY`}
+              </SectionLabel>
+              {phase.results.length === 0 ? (
+                <Text style={styles.dim}>
+                  No golf courses tagged in OpenStreetMap within{' '}
+                  {SEARCH_RADIUS_KM} km. Try moving closer to a course, or
+                  contribute the course data to OSM.
+                </Text>
+              ) : (
+                phase.results.map(r => {
+                  const slug = `osm-${r.osmType}-${r.osmId}`
+                  const installed = installedIds.has(slug)
+                  const installing = installingId === r.osmId
+                  return (
+                    <GlassSurface
+                      key={`${r.osmType}-${r.osmId}`}
+                      dark={false}
+                      rounded={radius['2xl']}
+                      style={styles.row}
+                    >
+                      <View style={styles.rowMain}>
+                        <Text style={styles.rowName} numberOfLines={2}>
+                          {r.name}
+                        </Text>
+                        <Text style={styles.rowMeta}>
+                          {distanceLabel(r.distanceM)} away · OSM {r.osmType}{' '}
+                          {r.osmId}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.installBtn,
+                          installed && styles.installBtnDone,
+                        ]}
+                        onPress={() => handleInstall(r)}
+                        disabled={installing || !!installingId}
+                      >
+                        {installing ? (
+                          <ActivityIndicator color={colors.primary} />
+                        ) : (
+                          <Text style={styles.installBtnText}>
+                            {installed ? '✓ INSTALLED' : 'INSTALL'}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </GlassSurface>
+                  )
+                })
+              )}
+              <Button
+                label="Search Again"
+                variant="ghost"
+                size="md"
+                onPress={handleSearch}
+                style={{ marginTop: space.sm }}
+              />
+            </View>
+          )}
+
+          {installError && (
+            <GlassSurface
+              rounded={radius.lg}
+              style={styles.errorBox}
+              dark={false}
+            >
+              <Text style={styles.errorText}>{installError}</Text>
+            </GlassSurface>
+          )}
+        </ScrollView>
+      </MapBackdrop>
+    </View>
   )
 }
 
@@ -252,9 +271,14 @@ function distanceLabel(meters: number): string {
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: space.marginMobile, gap: space.md },
-  intro: { gap: space.xs },
-  introBody: { ...type.bodyMd, color: colors.onSurfaceVariant, marginTop: 2 },
+  root: { flex: 1, backgroundColor: colors.surfaceLowest },
+  scroll: {
+    padding: space.marginMobile,
+    paddingTop: space.md,
+    gap: space.md,
+  },
+  intro: { padding: space.lg, gap: space.xs },
+  introBody: { ...type.bodyMd, color: colors.onSurface, marginTop: 2 },
 
   section: { gap: space.sm },
   sectionHeader: { marginBottom: space.xs },
@@ -271,10 +295,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
+    padding: space.md,
   },
-  rowMain: { flex: 1, gap: 2 },
+  rowMain: { flex: 1, minWidth: 0, gap: 2 },
   rowName: { ...type.headlineMd, color: colors.primary },
-  rowMeta: { ...type.labelXs, textTransform: 'none' as const },
+  rowMeta: {
+    ...type.labelXs,
+    color: colors.onSurface,
+    textTransform: 'none' as const,
+  },
 
   installBtn: {
     paddingHorizontal: space.md,
@@ -294,12 +323,6 @@ const styles = StyleSheet.create({
 
   dim: { ...type.bodyMd, color: colors.onSurfaceMuted, textAlign: 'center' },
 
-  errorBox: {
-    backgroundColor: colors.errorContainer,
-    padding: space.md,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.error,
-  },
+  errorBox: { padding: space.md, borderColor: colors.error },
   errorText: { ...type.bodyMd, color: colors.primary },
 })

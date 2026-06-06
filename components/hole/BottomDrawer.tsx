@@ -12,9 +12,10 @@ import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react-native'
 
 import { Hole } from '@/lib/course'
 import { colors, radius, shadows, space, type } from '@/lib/theme'
-import { IconButton } from '@/components/Button'
+import { Button, IconButton } from '@/components/Button'
 
 import { useHoleScene } from './scene'
+import { GlassSurface } from '../GlassSurface'
 
 // Per-cell size in the hole-grid (square, aspectRatio: 1). Used both for the
 // flex layout and for computing the Animated height target on expand. The
@@ -82,7 +83,7 @@ export function BottomDrawer() {
   }
 
   return (
-    <View style={[drawer.wrap, { paddingBottom: insets.bottom }]}>
+    <GlassSurface style={[drawer.wrap, { paddingBottom: insets.bottom }]}>
       <Animated.View style={[drawer.gridWrap, { height: heightAnim }]}>
         <HoleGrid
           holes={holes}
@@ -113,6 +114,7 @@ export function BottomDrawer() {
           accessibilityLabel={
             expanded ? 'Close hole selector' : 'Open hole selector'
           }
+          hitSlop={16}
         >
           <View style={drawer.navCenterRow}>
             <Text style={drawer.navCenterNum}>{currentHole.num}</Text>
@@ -134,7 +136,7 @@ export function BottomDrawer() {
           onPress={goNext}
         />
       </View>
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -152,35 +154,41 @@ function HoleGrid({
     rows.push(holes.slice(i, i + GRID_COLS))
   }
   return (
-    <View style={drawer.gridInner}>
+    <GlassSurface dark={false} style={drawer.gridInner}>
       {rows.map((row, ri) => (
         <View key={ri} style={drawer.gridRow}>
           {row.map(h => {
             const active = h.num === currentHoleNum
             return (
-              <TouchableOpacity
+              <IconButton
                 key={h.num}
-                style={[drawer.gridCell, active && drawer.gridCellActive]}
+                // style={[drawer.gridCell, active && drawer.gridCellActive]}
                 onPress={() => onSelect(h.num)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    drawer.gridCellNum,
-                    active && drawer.gridCellNumActive,
-                  ]}
-                >
-                  {h.num}
-                </Text>
-                <Text
-                  style={[
-                    drawer.gridCellPar,
-                    active && drawer.gridCellParActive,
-                  ]}
-                >
-                  PAR {h.par}
-                </Text>
-              </TouchableOpacity>
+                variant={active ? 'glass' : 'ghost'}
+                dark={active}
+                glyph={
+                  <View
+                    style={{ justifyContent: 'center', alignItems: 'center' }}
+                  >
+                    <Text
+                      style={[
+                        drawer.gridCellNum,
+                        // active && drawer.gridCellNumActive,
+                      ]}
+                    >
+                      {h.num}
+                    </Text>
+                    <Text
+                      style={[
+                        drawer.gridCellPar,
+                        active && drawer.gridCellParActive,
+                      ]}
+                    >
+                      PAR {h.par}
+                    </Text>
+                  </View>
+                }
+              />
             )
           })}
           {row.length < GRID_COLS &&
@@ -189,7 +197,7 @@ function HoleGrid({
             ))}
         </View>
       ))}
-    </View>
+    </GlassSurface>
   )
 }
 
@@ -226,6 +234,7 @@ function NavButton({
       onPress={onPress}
       disabled={disabled}
       activeOpacity={0.7}
+      hitSlop={16}
     >
       {!glyphRight && <Text style={navBtn.glyph}>{glyph}</Text>}
       <Text style={navBtn.label}>{label}</Text>
@@ -240,7 +249,6 @@ const drawer = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: colors.surfaceHighest,
     borderTopLeftRadius: radius['3xl'],
     borderTopRightRadius: radius['3xl'],
     ...shadows.drawer,
@@ -309,9 +317,6 @@ const drawer = StyleSheet.create({
     fontSize: 18,
     lineHeight: 20,
   },
-  gridCellNumActive: {
-    color: colors.surfaceHighest,
-  },
   gridCellPar: {
     color: colors.onSurfaceVariant,
     fontFamily: 'Sora_600SemiBold',
@@ -319,7 +324,7 @@ const drawer = StyleSheet.create({
     letterSpacing: 1.2,
   },
   gridCellParActive: {
-    color: colors.surfaceLow,
+    color: colors.onSurface,
   },
 })
 

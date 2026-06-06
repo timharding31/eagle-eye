@@ -8,12 +8,12 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 
-import { Card } from '@/components/Card'
-import { ScreenShell } from '@/components/ScreenShell'
-import { TopBar } from '@/components/TopBar'
+import { GlassHeader } from '@/components/GlassHeader'
+import { GlassSurface } from '@/components/GlassSurface'
+import { MapBackdrop } from '@/components/MapBackdrop'
 import { listAllCourses, type CourseSummary } from '@/lib/course'
 import { historyWithScores, type RoundSummary } from '@/lib/round'
-import { colors, space, type } from '@/lib/theme'
+import { colors, radius, space, type } from '@/lib/theme'
 
 export default function HistoryScreen() {
   const router = useRouter()
@@ -31,36 +31,41 @@ export default function HistoryScreen() {
   }, [])
 
   return (
-    <ScreenShell>
-      <TopBar
-        title="ROUND HISTORY"
-        subtitle="ALL FINISHED ROUNDS"
-        onBack={() => router.back()}
-      />
-      {err ? (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>{err}</Text>
-        </View>
-      ) : !summaries ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.centerText}>Loading…</Text>
-        </View>
-      ) : summaries.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.emptyTitle}>No rounds yet</Text>
-          <Text style={styles.emptyBody}>
-            Finished rounds will show up here once you save a scorecard.
-          </Text>
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.scroll}>
-          {summaries.map(s => (
-            <HistoryRow key={s.round.id} summary={s} courses={courses} />
-          ))}
-        </ScrollView>
-      )}
-    </ScreenShell>
+    <View style={styles.root}>
+      <MapBackdrop>
+        <GlassHeader
+          onBack={() => router.back()}
+          title="ROUND HISTORY"
+          subtitle="ALL FINISHED ROUNDS"
+        />
+        {err ? (
+          <View style={styles.center}>
+            <Text style={styles.errorText}>{err}</Text>
+          </View>
+        ) : !summaries ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.centerText}>Loading…</Text>
+          </View>
+        ) : summaries.length === 0 ? (
+          <View style={styles.center}>
+            <Text style={styles.emptyTitle}>No rounds yet</Text>
+            <Text style={styles.emptyBody}>
+              Finished rounds will show up here once you save a scorecard.
+            </Text>
+          </View>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+          >
+            {summaries.map(s => (
+              <HistoryRow key={s.round.id} summary={s} courses={courses} />
+            ))}
+          </ScrollView>
+        )}
+      </MapBackdrop>
+    </View>
   )
 }
 
@@ -75,9 +80,11 @@ function HistoryRow({
   const courseName =
     courses.find(c => c.slug === round.courseId)?.name ?? round.courseId
   return (
-    <Card variant="surface" padding="md" style={styles.row}>
+    <GlassSurface dark={false} rounded={radius['2xl']} style={styles.row}>
       <View style={styles.rowMain}>
-        <Text style={styles.rowCourse}>{courseName}</Text>
+        <Text style={styles.rowCourse} numberOfLines={1}>
+          {courseName}
+        </Text>
         <Text style={styles.rowDate}>{formatDate(round.startedAt)}</Text>
         {scoreCount > 0 && scoreCount < 18 && (
           <Text style={styles.rowPartial}>
@@ -91,7 +98,7 @@ function HistoryRow({
         </Text>
         <Text style={styles.rowScoreLabel}>SCORE</Text>
       </View>
-    </Card>
+    </GlassSurface>
   )
 }
 
@@ -105,7 +112,12 @@ function formatDate(ts: number): string {
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: space.marginMobile, gap: space.sm },
+  root: { flex: 1, backgroundColor: colors.surfaceLowest },
+  scroll: {
+    padding: space.marginMobile,
+    paddingTop: space.md,
+    gap: space.sm,
+  },
   center: {
     flex: 1,
     alignItems: 'center',
@@ -127,10 +139,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
+    padding: space.md,
   },
-  rowMain: { flex: 1, gap: 2 },
+  rowMain: { flex: 1, minWidth: 0, gap: 2 },
   rowCourse: { ...type.headlineMd, color: colors.primary },
-  rowDate: { ...type.bodyMd, color: colors.onSurfaceVariant },
+  rowDate: { ...type.bodyMd, color: colors.onSurface },
   rowPartial: {
     color: colors.error,
     fontSize: 12,
@@ -144,5 +157,5 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     lineHeight: 36,
   },
-  rowScoreLabel: { ...type.labelXs, marginTop: 2 },
+  rowScoreLabel: { ...type.labelXs, color: colors.onSurface, marginTop: 2 },
 })

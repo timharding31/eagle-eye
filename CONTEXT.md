@@ -87,7 +87,7 @@ The act of downloading both raster (satellite) and vector tile data for a Course
 
 These terms drift in from commercial-golf-app speak or generic software speak. Don't use them in code or docs — they substitute for, or muddy, terms above.
 
-- "Yardage" → say **distance**. Geo math is always in metres; the display converts to yards at the boundary today, and a units setting is planned for Phase 7 — so don't bake "yards" into names or stored values.
+- "Yardage" → say **distance**. Geo math is always in metres; the display converts to yards at the boundary. Yards-only is intentional (a units toggle is a won't-do), but still don't bake "yards" into names or stored values — keep the metres-internal / yards-at-the-boundary split.
 - "Layup" → use **Landing Zone** instead.
 - "Hole-out," "make," "finish hole" → just **mark next hole** or **next hole**.
 - "Tracker," "GPS tracker" → Eagle Eye is a **rangefinder + scorecard**, not a tracker. We don't continuously track position to disk.

@@ -5,12 +5,12 @@
 
 ## Context
 
-Eagle Eye supports two map styles, toggleable in-app:
+Eagle Eye renders two map styles. **Satellite** is the in-round view; **vector** is the automatic fallback the map drops to when the satellite pack is unavailable (e.g. ESRI unreachable and nothing cached):
 
-- **Vector**: OpenFreeMap-style vector tiles + the course's own polygon overlay (greens, fairways, etc.).
-- **Satellite**: ESRI World Imagery raster tiles + the course's polygon overlay.
+- **Satellite**: ESRI World Imagery raster tiles + the course's polygon overlay. The primary play view.
+- **Vector**: OpenFreeMap-style vector tiles + the course's own polygon overlay (greens, fairways, etc.). The offline fallback basemap.
 
-Golf courses notoriously have poor cell signal. Both styles need to work without connectivity once the user is on the course.
+Golf courses notoriously have poor cell signal. Both styles need to work without connectivity once the player is on the course.
 
 The OSM course data itself (green polygons, etc.) is tiny — a few hundred KB per course, bundled or fetched once and stored as JSON. The expensive part is the underlying tiles.
 
@@ -32,7 +32,7 @@ Options considered for tile offline strategy:
 
 - Triggered automatically when a course is installed (bundled course at first launch; Overpass course at fetch time).
 - Bounding box derived from the course's overall bounds.
-- Zoom range: 16–18 (~5m/px to ~1.2m/px), enough for hole-level overview and green-level detail.
+- Zoom range: 16–18 (~5m/px to ~1.2m/px), enough for hole-level overview and green-level detail. _(Later deepened: satellite packs now go to z20, and z21 for Presidio — see the `lib/tiles` row in PLANNING.md.)_
 - Implemented via MapLibre's `offlineManager.createPack()`, one pack per (course, style) pair.
 - Pre-fetch can be retried via a button if it fails or is interrupted.
 
@@ -40,7 +40,7 @@ Options considered for tile offline strategy:
 
 **Positive**:
 
-- Both map styles work fully offline at the course. No bait-and-switch where the user toggles to satellite and sees "no connection."
+- Both map styles work fully offline at the course. No bait-and-switch where the satellite view drops to "no connection" mid-round.
 - Course-add is the one moment we expect the user to have wifi (at home, adding a course to prepare for a round). Bundling tile download into that moment is natural.
 - MapLibre's offline-pack API handles tile storage, eviction, and serving transparently. No manual tile-cache logic.
 - One module owns it (`lib/tiles`); other modules don't care about offline state.
@@ -49,7 +49,7 @@ Options considered for tile offline strategy:
 
 - Storage cost: ~25-50MB per course × 5-10 courses = 125-500MB. Acceptable on modern phones.
 - The pre-fetch download takes time (1-3 minutes per course on typical wifi). Progress UI required.
-- If pre-fetch fails (signal drops, app killed), satellite mode is broken for that course until retry. The vector base map is small enough that it usually completes first; if only satellite is missing, the toggle still shows a usable map.
+- If pre-fetch fails (signal drops, app killed), satellite mode is broken for that course until retry. The vector base map is small enough that it usually completes first; if only satellite is missing, the map automatically falls back to vector and still shows a usable course.
 - Bounds expansion: if a course extends past its OSM polygon bounds (e.g., a hole that goes off the listed boundary), some tiles might be missing. Mitigation: expand the bbox by 5-10% before pre-fetch.
 
 **Vector base map note**:

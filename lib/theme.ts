@@ -71,6 +71,14 @@ const _errCont = oklch(0.4171, 0.1702, 27.4) // error container   L [0.25–0.50
 const _errOn = oklch(0.3275, 0.1336, 27.3) // on-error text     L [0.20–0.40]  C [0.08–0.18]  H [15–40]
 const _lzFill = oklch(0.2549, 0.0885, 256.4) // landing zone fill L [0.15–0.45]  C [0.05–0.15]  H [240–270]
 const _fairway = oklch(0.4021, 0.0831, 165.2) // fairway green     L [0.30–0.55]  C [0.05–0.14]  H [140–180]
+// "Imagery ready"/positive bright green — a lighter, more saturated shade of
+// the fairway knob so it stays in the oklch system (retheme via _fairway).
+// Matches the mockup's --fairway-bright (≈ #2f9d6f). Chroma is bumped past the
+// proportional shade() ramp to read as a vivid "ready" accent. [dL 0.12–0.20]
+const _fairwayBright = ((): Ok => {
+  const [l, c, h] = shade(_fairway, 0.16)
+  return oklch(l, c * 1.28, h)
+})()
 
 // Lightness step between adjacent surface tones — raise for more contrast.
 const _step = 0.038 // [0.02–0.06]
@@ -112,6 +120,8 @@ export const colors = {
   landingZone: toHex(_primary),
   landingZoneFill: toHex(_lzFill),
   fairwayGreen: toHex(_fairway),
+  // Bright "ready"/positive green for imagery-ready chips and played-hole tints.
+  fairwayBright: toHex(_fairwayBright),
 
   // ── glass effects (opaque dark surface at high alpha + hairline border) ──
   glass: toRgba(shade(_surface, -0.059), 0.92), // surfaceHighest tint

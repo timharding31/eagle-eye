@@ -103,7 +103,7 @@ function FpbPanel({
 function TeeDistancePanel({ meters }: { meters: number }) {
   return (
     <GlassSurface style={[fpb.panel, teePanel.panel]}>
-      <GolfTeeIcon width={24} height={24} color={colors.onSurface} />
+      <GolfTeeIcon width={22} height={22} color={colors.onSurface} />
       <Text style={teePanel.value}>{fmtYds(Math.round(meters * M_TO_YD))}</Text>
     </GlassSurface>
   )
@@ -124,9 +124,9 @@ function FpbCell({
   return (
     <View style={fpb.cell}>
       {front ? (
-        <GreenFrontIcon width={24} height={24} color={colors.onSurface} />
+        <GreenFrontIcon width={22} height={22} color={colors.onSurface} />
       ) : back ? (
-        <GreenBackIcon width={24} height={24} color={colors.onSurface} />
+        <GreenBackIcon width={22} height={22} color={colors.onSurface} />
       ) : null}
       <Text
         style={[

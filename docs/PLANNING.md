@@ -16,7 +16,7 @@ Personal golf GPS rangefinder. Built for the author and friends. Sideloaded as a
 - Real-time pin location (impossible without course operator integration).
 - Universal course coverage on launch. Five well-modeled courses beats five thousand badly-modeled ones.
 - Live, in-round score entry. Author wears a glove on phone hand and prefers paper scorecards. Scores are entered post-round only.
-- Per-shot tracking beyond tee shots in MVP. Tee shot capture is opt-in, two big buttons, dismissible.
+- Per-shot tracking. The MVP tried opt-in two-tap tee-shot capture; it was dropped post-MVP as too clunky on the course and replaced by a passive Distance from Tee readout (see [ADR-010](adr/0010-shot-recording-dropped.md)).
 - Tee box selection / posted-yardage display in MVP. Distances are to the pin and green polygon; same number regardless of tee.
 - Background GPS / continuous tracking. Foreground only.
 
@@ -27,8 +27,8 @@ A single "MVP done" line at the end of Phase 4 below. The MVP delivers:
 - Distance to pin, front of green, back of green — live, three big numbers stacked at the top of the screen.
 - Pin position defaults to the green's centroid; tap on the green polygon in the map to move it. Persists per hole within the current round.
 - Manual hole navigation — Prev / Next buttons. Hole header tappable to jump to any hole 1–18.
-- Map view (vector + satellite, toggleable on the map). Both layers pre-downloaded per course for offline use.
-- Tee shot capture: "Start Tee Shot" → "Mark Tee Shot" two-tap flow. Dismissible. Distance computed.
+- Satellite map view, pre-downloaded per course for offline use (a vector basemap is also prefetched as an automatic offline fallback — see [ADR-008](adr/0008-prefetch-both-tile-layers.md)).
+- Tee shot capture: "Start Tee Shot" → "Mark Tee Shot" two-tap flow. _(Shipped in the MVP, later removed — see [ADR-010](adr/0010-shot-recording-dropped.md).)_
 - Round persistence: SQLite-backed, single active round at a time, resumes on app open.
 - Post-round scorecard entry: one screen, 18 boxes, save.
 - Round history: list of past rounds with date / course / score.
@@ -44,7 +44,7 @@ A single "MVP done" line at the end of Phase 4 below. The MVP delivers:
 | Satellite tile source | ESRI World Imagery                                                            | Free, no API key, high quality. Mapbox Satellite is the fallback if ESRI ever changes terms.                        |
 | Location              | `expo-location`                                                               | Foreground only, 1 Hz, balanced accuracy. Plenty for golf.                                                          |
 | Storage               | `expo-sqlite` + Drizzle ORM                                                   | Typed schema, typed queries, migrations. Drizzle is internal to data modules — never leaks into interfaces.         |
-| State                 | Zustand                                                                       | Tiny, no provider boilerplate. One store per concept (`useRoundStore`, `useSettingsStore`).                         |
+| State                 | Zustand                                                                       | Tiny, no provider boilerplate. One store per concept (e.g. the round store, the pending-install store).             |
 | Routing               | Expo Router (file-based)                                                      | Conventions match wider ecosystem. Type-safe routes.                                                                |
 | Geo math              | Turf.js (`@turf/turf`)                                                        | Tree-shakeable. Wrapped by `lib/geo` — Turf never appears in `lib/geo`'s interface.                                 |
 | Styling               | In-house design system (`lib/theme.ts`) + RN `StyleSheet`                     | Small token set (colors/type/space/radius/shadows); no UI-kit dependency (Gluestack was removed).                   |
@@ -59,19 +59,22 @@ See [ADR-005](adr/0005-maplibre-offline-packs.md) for the renderer choice ration
 
 Modules are grouped by domain concept, not by layer. Each one earns its place by the deletion test: removing it would scatter complexity across multiple callers. Interfaces are small; implementations are substantial. Internal seams (Drizzle, Turf, MapLibre's native APIs) are not exposed through the external interface.
 
-| Module       | What it owns                                                                                                                                                                  | External interface (rough)                                                                                                                                                                                                                                                                                                                                                                                                   | Internal seams                                                                    |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `lib/geo`    | Pure geospatial computation.                                                                                                                                                  | `distanceMeters(a, b)`, `nearestPointOnPolygon(here, poly)`, `farthestPointOnPolygon(here, poly)`, `centroid(poly)`, `pointInPolygon(pt, poly)`, `bearingDeg(a, b)`, `frameForHole(...)`, `lzInitPositions(tee, greenCentroid, count)`, `bboxOf(hole)`                                                                                                                                                                       | Turf.js                                                                           |
-| `lib/course` | Course data loading, normalization, and the Overpass adapter. Shape is source-agnostic — bundled JSON, Overpass fetch, and future ML inference all produce the same `Course`. | `loadCourse(slug)`, `loadBundledCourse(slug)`, `loadInstalledCourse(id)`, `listBundledCourses()`, `listInstalledCourses()`, `listAllCourses()`, `findNearby(here, radiusKm)`, `fetchCourseFromOverpass(osmType, osmId)`, `applyMissingFixes(...)` (tap-to-fix), `installCourse(course)`, `removeInstalledCourse(id)`, `normalize(...)` (shared with build script), pending-install store (`set/get/clear/usePendingInstall`) | OSM tag parsing, Drizzle queries, Overpass HTTP client, Zustand (pending-install) |
-| `lib/round`  | Round lifecycle. Owns the single-active-round invariant. State machine: `idle → active → ended`.                                                                              | `startRound(courseId)`, `endRound(round, scores)`, `useActiveRound()`, `setPin(holeNum, latLng)`, `getHoleState(round, holeNum)`, `history()`                                                                                                                                                                                                                                                                                | Drizzle, Zustand store, stale-round detection                                     |
-| `lib/tiles`  | Offline tile management. Wraps MapLibre's offline-pack API for both raster (satellite) and vector layers.                                                                     | `prefetchForCourse(courseId)`, `prefetchStatus(courseId)`, `retryPrefetch(courseId)`, `vectorStyle`, `satelliteStyle`                                                                                                                                                                                                                                                                                                        | MapLibre's offline manager, URL templates                                         |
-| `lib/shots`  | Tee shot recording. Small but earning its place — owns the in-flight "recording" state and the GPS snapshot logic.                                                            | `startTeeShot(holeNum)`, `markTeeShot()`, `cancelTeeShot()`, `useCurrentTeeShot()`                                                                                                                                                                                                                                                                                                                                           | GPS sampling, Drizzle, in-flight Zustand state                                    |
+| Module       | What it owns                                                                                                                                                                                                                                                                                                                                  | External interface (rough)                                                                                                                                                                                                                                                                                                                                                                                                   | Internal seams                                                                    |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `lib/geo`    | Pure geospatial computation.                                                                                                                                                                                                                                                                                                                  | `distanceMeters(a, b)`, `nearestPointOnPolygon(here, poly)`, `farthestPointOnPolygon(here, poly)`, `centroid(poly)`, `pointInPolygon(pt, poly)`, `bearingDeg(a, b)`, `frameForHole(...)`, `lzInitPositions(tee, greenCentroid, count)`, `bboxOf(hole)`                                                                                                                                                                       | Turf.js                                                                           |
+| `lib/course` | Course data loading, normalization, and the Overpass adapter. Shape is source-agnostic — bundled JSON, Overpass fetch, and future ML inference all produce the same `Course`.                                                                                                                                                                 | `loadCourse(slug)`, `loadBundledCourse(slug)`, `loadInstalledCourse(id)`, `listBundledCourses()`, `listInstalledCourses()`, `listAllCourses()`, `findNearby(here, radiusKm)`, `fetchCourseFromOverpass(osmType, osmId)`, `applyMissingFixes(...)` (tap-to-fix), `installCourse(course)`, `removeInstalledCourse(id)`, `normalize(...)` (shared with build script), pending-install store (`set/get/clear/usePendingInstall`) | OSM tag parsing, Drizzle queries, Overpass HTTP client, Zustand (pending-install) |
+| `lib/round`  | Round lifecycle. Owns the single-active-round invariant. State machine: `idle → active → ended`.                                                                                                                                                                                                                                              | `startRound(courseId)`, `endRound(round, scores)`, `useActiveRound()`, `setPin(holeNum, latLng)`, `getHoleState(round, holeNum)`, `history()`                                                                                                                                                                                                                                                                                | Drizzle, Zustand store, stale-round detection                                     |
+| `lib/tiles`  | Offline tile management. Wraps MapLibre's offline-pack API for both raster (satellite) and vector layers. Satellite imagery is ESRI World Imagery; the offline style is hosted on GitHub Pages (`docs/satellite-style.json`) because the downloader only fetches styles over http(s). Max zoom is per-course (z20 default, z21 for Presidio). | `prefetchForCourse(courseId, bounds)`, `prefetchStatus(courseId)`, `retryPrefetch(courseId, bounds)`, `vectorStyle`, `satelliteStyleFor(courseId)`, `satelliteMaxZoom(courseId)`                                                                                                                                                                                                                                             | MapLibre's offline manager, URL templates, ESRI World Imagery                     |
+
+Tee Corrections (`setTeeOverride`, `getTeeOverride`, `clearTeeOverride`) live in **`lib/course`** and are applied as an overlay inside `loadCourse` — see [ADR-009](adr/0009-tee-override-overlay.md). They replace the removed tee-shot feature (see below).
+
+`lib/shots` was **removed** ([ADR-010](adr/0010-shot-recording-dropped.md)). Tee-shot recording proved too clunky in on-course testing; it's replaced by a passive Distance from Tee readout backed by the Tee Correction.
 
 #### Seam status
 
 - **`lib/geo`**: no seam. Pure in-process computation. Interface is the test surface (if tests ever exist).
-- **`lib/course`**: the seam is now real (as of Phase 6). It has two production adapters — bundled-JSON and Overpass — both feeding the shared `normalize()` (which the Node build script also calls). The Overpass path adds Find Nearby discovery, fetch, tap-to-fix green synthesis, and SQLite install/remove.
-- **`lib/round`**, **`lib/tiles`**, **`lib/shots`**: single-adapter modules. SQLite, MapLibre, GPS each have only one production implementation each. No port-and-adapter indirection until a second implementation is justified.
+- **`lib/course`**: the seam is now real (as of Phase 6). It has two production adapters — bundled-JSON and Overpass — both feeding the shared `normalize()` (which the Node build script also calls). The Overpass path adds Find Nearby discovery, fetch, tap-to-fix green synthesis, and SQLite install/remove. Also owns Tee Corrections.
+- **`lib/round`**, **`lib/tiles`**: single-adapter modules. SQLite and MapLibre each have only one production implementation. No port-and-adapter indirection until a second implementation is justified.
 
 ### Repo layout
 
@@ -81,9 +84,8 @@ eagle-eye/
 │   ├── _layout.tsx           # Migrations + hydration + fonts + providers
 │   ├── index.tsx             # Home (course picker or active-round resume)
 │   ├── history.tsx           # Round history list
-│   ├── spike.tsx             # Map risk-spike screen (kept for debugging)
 │   ├── round/
-│   │   ├── [hole].tsx        # The hole screen
+│   │   ├── [hole].tsx        # The hole screen — thin route loader (see below)
 │   │   └── scorecard.tsx     # Post-round score entry
 │   └── courses/
 │       ├── add.tsx           # Find Nearby (Phase 6)
@@ -91,22 +93,28 @@ eagle-eye/
 ├── lib/
 │   ├── geo/
 │   ├── course/
-│   │   ├── index.ts          # External interface + Overpass adapter
+│   │   ├── index.ts          # External interface + Overpass adapter + tee corrections
 │   │   ├── normalize.ts      # Shared with scripts/build-course.ts
 │   │   ├── types.ts          # Course/Hole/Position types + isCourseValid
-│   │   └── schema.ts         # Drizzle schema for courses
+│   │   └── schema.ts         # Drizzle schema for courses + tee_overrides
 │   ├── round/
 │   │   ├── index.ts
 │   │   └── schema.ts
-│   ├── tiles/
-│   ├── shots/
-│   └── theme.ts              # In-house design system (colors/type/space/…)
+│   ├── tiles/                # Offline packs + ESRI satellite style
+│   └── theme.ts              # In-house design system (oklch-generated palette)
 ├── components/               # Leaf UI primitives
 │   ├── Button.tsx  Card.tsx  ScreenShell.tsx  SectionLabel.tsx
-│   ├── TopBar.tsx  EagleIcon.tsx
-│   └── icons.tsx             # SVG glyphs (custom + lucide re-exports)
+│   ├── TopBar.tsx  EagleIcon.tsx  GlassSurface.tsx
+│   ├── icons.tsx             # SVG glyphs (custom + lucide re-exports)
+│   └── hole/                 # The decomposed hole view (scene + regions)
+│       ├── scene.tsx         # HoleSceneProvider / useHoleScene — GPS, geometry, toggles
+│       ├── HoleLayout.tsx    # Composition root: regions stacked over the map
+│       ├── HoleMap.tsx  HoleHeader.tsx  HoleMeasurements.tsx
+│       ├── HoleButtonStack.tsx  BottomDrawer.tsx  TeeOverrideDialog.tsx
+│       └── units.ts          # M_TO_YD
 ├── db/
-│   └── index.ts              # Drizzle client setup
+│   ├── index.ts              # Drizzle client setup
+│   └── migrations.ts         # Hand-maintained static migration bundle (runtime)
 ├── courses/                  # Bundled course JSON (committed)
 │   ├── presidio.json  harding-park.json  crystal-springs.json
 │   └── lincoln-park.json  peacock-gap.json
@@ -114,7 +122,10 @@ eagle-eye/
 │   └── build-course.ts       # Node script: OSM ID → courses/<slug>.json
 ├── docs/
 │   ├── PLANNING.md           # This file
-│   └── adr/                  # Architecture Decision Records (0001–0008)
+│   ├── UI_LAYOUT.md          # Hole-view pixels → components/hole/ files
+│   ├── UI_CRITIQUE.md        # Polish assessment of the hole view
+│   ├── satellite-style.json  # ESRI offline style, served from GitHub Pages
+│   └── adr/                  # Architecture Decision Records (0001–0010)
 ├── CONTEXT.md                # Domain language glossary
 └── ...
 
@@ -155,8 +166,13 @@ A course is "valid" if every hole has a green and a tee. The Overpass fetch path
 courses        (id, name, source, raw_data_blob, bounds, added_at)
 rounds         (id, course_id, started_at, ended_at, current_hole, notes)
 hole_states    (round_id, hole_num, pin_lat, pin_lng, score)
-tee_shots      (round_id, hole_num, start_lat, start_lng, end_lat, end_lng, distance_m, recorded_at)
+tee_overrides  (course_id, hole_num, lat, lng, set_at)   -- PK (course_id, hole_num); ADR-009
 ```
+
+The `tee_shots` table was dropped in migration `m0001` along with the tee-shot
+feature — see [ADR-010](adr/0010-shot-recording-dropped.md). `tee_overrides` is
+keyed by course (not round): a tee correction is a course-data fix that persists
+across rounds.
 
 **Invariant:** at most one row in `rounds` where `ended_at IS NULL`. Enforced inside `lib/round`. See [ADR-002](adr/0002-sqlite-source-of-truth.md).
 
@@ -194,23 +210,27 @@ Layout: rangefinder-first. See ASCII mock below.
 │                          │  ← tap on green to set pin
 ├──────────────────────────┤
 │  ◀ Prev      Next ▶      │  ← manual hole nav (no auto-detect)
-│  ━━━━━━━━━━━━━━━━━━━━━━  │
-│   ⛳  Start Tee Shot      │  ← dismissible; becomes Mark Tee Shot after tap
 └──────────────────────────┘
 ```
 
-- Distance updates every GPS tick (~1 Hz) via `lib/geo`. Numbers are shown in **yards** (converted from metres at the display boundary via `YD_TO_M`).
-- Map controls live on the map itself, not in settings: style toggle (vector / satellite), a reframe button (`frameForHole`), a green-mode toggle that tightens the camera to a green-only frame, and the Landing Zone toggle (Phase 5).
+> The actual screen is now a full-screen map with the F/G/B numbers and controls
+> floating as glass chrome on top (see `docs/UI_LAYOUT.md`), but the rangefinder-
+> first hierarchy above still holds. A live **Distance from Tee** pill sits under
+> the F/G/B panel once the player is off the tee — it replaces the old tee-shot
+> recording (see Tee correction below).
+
+- Distance updates every GPS tick (~1 Hz) via `lib/geo`. Numbers are shown in **yards** (converted from metres at the display boundary via `M_TO_YD`).
+- Map controls live on the map itself, not in settings: a green-mode toggle that tightens the camera to a green-only frame, the Landing Zone toggle (Phase 5), and Set Tee (tee correction). The map renders satellite imagery; hole navigation eases the camera in place (`router.setParams`, not a route replace, so the map instance stays mounted).
 - "Next" past hole 18 navigates to the post-round scorecard.
 
-### Tee shot recording
+### Tee correction + Distance from Tee
 
-1. User taps "Start Tee Shot" on the hole screen.
-2. `lib/shots.startTeeShot(holeNum)` records current GPS as `start_lat/lng`. Button changes to "Mark Tee Shot."
-3. User walks to ball, taps "Mark Tee Shot." `lib/shots.markTeeShot()` records current GPS as `end_lat/lng`, computes distance via `lib/geo`, persists row.
-4. Button returns to "Start Tee Shot" (next hole's tee shot is independent).
+Replaces the original two-tap tee-shot recording, which was dropped after on-course
+testing — see [ADR-010](adr/0010-shot-recording-dropped.md).
 
-If user navigates away mid-recording, the in-flight state is preserved in Zustand + SQLite; on return the button still says "Mark Tee Shot."
+1. OSM tee points are often wrong. On the hole screen, the player taps **Set Tee**, which opens a confirm dialog showing how far the tee would move; confirming snaps the hole's Tee to the live GPS fix.
+2. `lib/course.setTeeOverride(courseId, holeNum, pos)` upserts a `tee_overrides` row; the screen re-loads the course so the corrected tee flows into distances, framing, and Distance from Tee. The correction persists across rounds (it's a course-data fix). "Clear correction" restores the source tee via `clearTeeOverride`.
+3. With a trustworthy tee, the **Distance from Tee** pill shows a live straight-line GPS→tee distance — no tap, no recording. It appears once the player is meaningfully off the tee and gives the drive-distance read the old feature was after, passively.
 
 ### End a round
 
@@ -232,7 +252,15 @@ If user navigates away mid-recording, the in-flight state is preserved in Zustan
 
 Vertical-slice phasing. Each phase ends with something testable on a real round.
 
-**Status (2026-05-29):** Phases 0–6 are code-complete. The MVP (through Phase 4), the Landing Zone overlay (Phase 5), and More Courses + Find Nearby (Phase 6 — five bundled courses, Overpass discovery/fetch, tap-to-fix, SQLite install) are all in. An app icon + adaptive icon have landed and the app was re-themed onto the in-house `lib/theme.ts` design system (Sora typeface, navy/cream/maroon). **Phase 7 (polish & ship)** is next: onboarding, a settings screen (incl. the units toggle — distances are currently yards-only), and the EAS preview build.
+**Status (2026-06-04):** Phases 0–6 are code-complete. The MVP (through Phase 4), the Landing Zone overlay (Phase 5), and More Courses + Find Nearby (Phase 6 — five bundled courses, Overpass discovery/fetch, tap-to-fix, SQLite install) are all in.
+
+Since then, several changes have landed **out of band** (not new phases):
+
+- **Tee-shot recording removed** ([ADR-010](adr/0010-shot-recording-dropped.md)). On-course testing found the two-tap flow too clunky; `lib/shots` and the `tee_shots` table are gone. Replaced by the **Set Tee** correction ([ADR-009](adr/0009-tee-override-overlay.md)) feeding a passive **Distance from Tee** readout.
+- **Hole view decomposed** into `components/hole/` — a `HoleSceneProvider`/`useHoleScene` context plus region components (`HoleMap`, `HoleMeasurements`, `HoleButtonStack`, `BottomDrawer`, `HoleHeader`, `TeeOverrideDialog`). `app/round/[hole].tsx` is now a thin route loader. Documented in `docs/UI_LAYOUT.md`.
+- **Glass UI + native satellite.** Real backdrop-blur glass chrome (`components/GlassSurface.tsx`, `expo-blur`) over native ESRI satellite imagery (z20, z21 for Presidio), with the offline style hosted on GitHub Pages. `lib/theme.ts` is now an oklch-generated palette.
+
+**Phase 7 (polish & ship)** is the only outstanding phase: onboarding, screen-level visual polish (home / round history / landing, then the hole view per `UI_CRITIQUE.md`), and the EAS preview build. The **settings panel is deferred** — there's no in-app settings yet — and a **units toggle is a won't-do**: distances stay yards-only (see below).
 
 ### Phase 0 — Foundation + risk spike (1-2 days)
 
@@ -267,23 +295,27 @@ Vertical-slice phasing. Each phase ends with something testable on a real round.
 
 ### Phase 3 — Satellite + full offline (3-5 days)
 
-- Grow `lib/tiles`: `prefetchForCourse(id)`, `prefetchStatus(id)`, `vectorStyle`, `satelliteStyle`.
+- Grow `lib/tiles`: `prefetchForCourse(id)`, `prefetchStatus(id)`, `vectorStyle`, `satelliteStyleFor(id)`.
 - ESRI satellite raster source + OpenFreeMap vector source.
-- Pre-download both layers (z=16-18) when a course is added.
-- Map style toggle button on the map view.
+- Pre-download both layers when a course is added. _(The z range later grew to z16–20, z21 for Presidio — see the module table above.)_
 - Progress UI for tile downloads; retry on failure.
 
 **Deliverable**: app works at the course with no cell signal.
 
 ### Phase 4 — Tee shots + scorecard ("MVP done") (2-3 days)
 
-- Drizzle schema for `tee_shots`.
-- Grow `lib/shots`: `startTeeShot`, `markTeeShot`, `cancelTeeShot`, `useCurrentTeeShot`.
+- Drizzle schema for `tee_shots`. _(Later dropped — see ADR-010.)_
+- Grow `lib/shots`: `startTeeShot`, `markTeeShot`, `cancelTeeShot`, `useCurrentTeeShot`. _(Module later removed.)_
 - "Start Tee Shot" / "Mark Tee Shot" buttons on hole screen. Dismissible.
 - Post-round scorecard screen — 18 boxes, single save action.
 - Round history list (date, course, score).
 
 **Deliverable**: MVP done. Author can play full rounds on bundled courses, capture occasional drive distances, log scores.
+
+> **Post-MVP correction:** the tee-shot capture in this phase was removed after
+> on-course testing ([ADR-010](adr/0010-shot-recording-dropped.md)). The
+> scorecard, history, and round persistence all remain. Drive distance is now a
+> passive Distance from Tee readout rather than recorded shots.
 
 ### Phase 5 — Landing Zone planning overlay (1-2 days)
 
@@ -324,10 +356,15 @@ Pre-shot planning waypoints on the hole map for par 4 and par 5 holes. All state
 ### Phase 7 — Polish & ship (2-3 days)
 
 - Single-screen onboarding (one screen, location permission grant, "Get Started").
-- Settings screen (3 toggles: default map style, units, about/credits).
+- Visual polish pass on the home, round-history, and landing screens (and the hole view per `UI_CRITIQUE.md`).
 - App icon (eagle silhouette?), splash, name in Android manifest.
 - EAS Build → preview APK.
 - Sideload, validate end-to-end on a real round, share with friends.
+
+**Won't do / deferred:**
+
+- **Units toggle — won't do.** Distances stay yards-only. The author plays in yards; a metres/yards toggle adds a setting and a stored preference for no real benefit. Geo math stays in metres internally regardless (converted at the display boundary), so this is a UI decision, not a data one.
+- **In-app settings panel — deferred.** With the units toggle dropped and the map style now automatic (satellite, vector fallback), there's nothing left that needs a settings screen. Revisit only if a genuinely user-facing preference appears.
 
 **Total**: ~3-4 weeks of part-time work. ~1.5-2 weeks if dedicated.
 

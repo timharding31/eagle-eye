@@ -1,0 +1,1289 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Eagle Eye — Home / History / Landing polish experiments</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* ── Real app palette, computed from the oklch knobs in lib/theme.ts ────── */
+      :root {
+        --surface-lowest: #0a1129;
+        --surface-low: #101a37;
+        --surface: #172246;
+        --surface-high: #1e2b55;
+        --surface-highest: #0d152f;
+        --primary: #fdf5e6; /* cream foreground */
+        --variant: #b4c5e0; /* secondary text */
+        --muted: rgba(253, 245, 230, 0.62);
+        --secondary: #800000; /* maroon CTA */
+        --secondary-pressed: #6a0000;
+        --eagle: #cf9f37; /* golden eagle accent */
+        --fairway: #03563d;
+        --fairway-bright: #2f9d6f; /* derived brighter green for "ready"/under-par */
+        --outline-variant: rgba(180, 197, 224, 0.25);
+        --glass-highlight: rgba(253, 245, 230, 0.14);
+        --glass-fill: rgba(37, 52, 101, 0.48);
+        --glass-fill-dark: rgba(23, 34, 70, 0.72);
+
+        /* spacing + radius mirror theme.ts */
+        --sm: 8px;
+        --md: 16px;
+        --lg: 24px;
+        --xl: 32px;
+        --r-md: 8px;
+        --r-lg: 12px;
+        --r-xl: 16px;
+        --r-2xl: 20px;
+        --r-3xl: 24px;
+
+        --display: 'Sora', system-ui, sans-serif;
+        --data: 'JetBrains Mono', ui-monospace, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        background: #060a18;
+        color: var(--primary);
+        font-family: var(--display);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* page chrome ─────────────────────────────────────────────────────────── */
+      .page {
+        max-width: 1760px;
+        margin: 0 auto;
+        padding: 56px 40px 96px;
+      }
+      .page-head {
+        margin-bottom: 48px;
+        max-width: 760px;
+      }
+      .kicker {
+        font: 600 12px/1 var(--data);
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        color: var(--eagle);
+        margin-bottom: 16px;
+      }
+      .page-head h1 {
+        font: 800 38px/1.05 var(--display);
+        letter-spacing: -0.02em;
+        margin-bottom: 14px;
+      }
+      .page-head p {
+        font: 400 16px/1.6 var(--display);
+        color: var(--variant);
+      }
+      .page-head code {
+        font: 600 13px/1 var(--data);
+        color: var(--eagle);
+        background: rgba(207, 159, 55, 0.1);
+        padding: 2px 6px;
+        border-radius: 5px;
+      }
+
+      .frames {
+        display: flex;
+        gap: 44px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .frame-col {
+        width: 372px;
+      }
+      .frame-label {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+      .frame-label b {
+        font: 700 15px/1 var(--display);
+        letter-spacing: -0.01em;
+      }
+      .frame-label span {
+        font: 500 11px/1 var(--data);
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      /* phone frame ─────────────────────────────────────────────────────────── */
+      .phone {
+        position: relative;
+        width: 372px;
+        height: 784px;
+        border-radius: 44px;
+        padding: 11px;
+        background: linear-gradient(150deg, #2a3147, #11141f 60%);
+        box-shadow:
+          0 2px 0 rgba(255, 255, 255, 0.06) inset,
+          0 40px 80px -30px rgba(0, 0, 0, 0.9),
+          0 0 0 1px rgba(0, 0, 0, 0.6);
+      }
+      .screen {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        border-radius: 34px;
+        overflow: hidden;
+        background: var(--surface-lowest);
+        display: flex;
+        flex-direction: column;
+      }
+      /* atmospheric depth: top glow + faint topographic contours */
+      .screen::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(
+            120% 60% at 50% -10%,
+            rgba(37, 52, 101, 0.55),
+            transparent 60%
+          ),
+          radial-gradient(
+            90% 50% at 110% 8%,
+            rgba(207, 159, 55, 0.07),
+            transparent 55%
+          );
+        pointer-events: none;
+        z-index: 0;
+      }
+      .contours {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        opacity: 0.5;
+        pointer-events: none;
+        mix-blend-mode: screen;
+      }
+
+      /* status bar */
+      .statusbar {
+        position: relative;
+        z-index: 3;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 26px 0;
+        font: 600 14px/1 var(--display);
+        color: var(--primary);
+        flex: 0 0 auto;
+      }
+      .statusbar .dots {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        opacity: 0.85;
+      }
+      .battery {
+        width: 24px;
+        height: 12px;
+        border-radius: 3px;
+        border: 1px solid rgba(253, 245, 230, 0.5);
+        position: relative;
+        font: 700 8px/12px var(--data);
+        text-align: center;
+      }
+
+      /* ── shared: refined top bar (fixes the cropped/oversized logo) ────────── */
+      .topbar {
+        position: relative;
+        z-index: 3;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 22px 16px;
+        flex: 0 0 auto;
+      }
+      .brand {
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(
+          120% 120% at 30% 20%,
+          rgba(207, 159, 55, 0.22),
+          rgba(13, 21, 47, 0.6)
+        );
+        border: 1px solid var(--outline-variant);
+        box-shadow: 0 1px 0 var(--glass-highlight) inset;
+        overflow: hidden;
+      }
+      .brand img {
+        width: 30px;
+        height: 30px;
+        object-fit: contain;
+      }
+      .wordmark {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        flex: 1;
+      }
+      .wordmark b {
+        font: 700 17px/1 var(--display);
+        letter-spacing: 0.14em;
+      }
+      .wordmark span {
+        font: 500 9.5px/1 var(--data);
+        letter-spacing: 0.28em;
+        color: var(--variant);
+        text-transform: uppercase;
+      }
+      .iconbtn {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--outline-variant);
+        background: var(--glass-fill);
+        color: var(--variant);
+      }
+      .topbar-rule {
+        position: relative;
+        z-index: 2;
+        height: 1px;
+        margin: 0 22px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--outline-variant) 18%,
+          var(--outline-variant) 82%,
+          transparent
+        );
+        flex: 0 0 auto;
+      }
+
+      /* body scroll area */
+      .body {
+        position: relative;
+        z-index: 2;
+        flex: 1 1 auto;
+        overflow: hidden;
+        padding: 20px 22px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .section-label {
+        font: 600 11px/1 var(--data);
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 4px 2px 2px;
+      }
+
+      /* ── glass card ───────────────────────────────────────────────────────── */
+      .card {
+        position: relative;
+        border-radius: var(--r-2xl);
+        background: var(--glass-fill-dark);
+        border: 1px solid var(--outline-variant);
+        border-top: 1px solid var(--glass-highlight);
+        backdrop-filter: blur(8px);
+        overflow: hidden;
+      }
+
+      /* course row card */
+      .course {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 18px 16px 18px 18px;
+      }
+      .course .meta {
+        flex: 1;
+        min-width: 0;
+      }
+      .course .name {
+        font: 600 19px/1.15 var(--display);
+        letter-spacing: -0.015em;
+        margin-bottom: 9px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font: 600 10px/1 var(--data);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--variant);
+      }
+      .status .chip-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--fairway-bright);
+        box-shadow: 0 0 0 3px rgba(47, 157, 111, 0.18);
+      }
+      .status.ready {
+        color: var(--fairway-bright);
+      }
+      /* slim progress bar for mid-download courses */
+      .dl {
+        margin-top: 10px;
+        height: 4px;
+        border-radius: 99px;
+        background: rgba(180, 197, 224, 0.16);
+        overflow: hidden;
+      }
+      .dl > i {
+        display: block;
+        height: 100%;
+        border-radius: 99px;
+        background: linear-gradient(
+          90deg,
+          var(--fairway),
+          var(--fairway-bright)
+        );
+      }
+      .dl-label {
+        margin-top: 7px;
+        font: 600 10px/1 var(--data);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      /* the maroon CTA */
+      .btn {
+        font: 700 14px/1 var(--display);
+        letter-spacing: 0.04em;
+        border: none;
+        border-radius: var(--r-lg);
+        padding: 14px 22px;
+        color: var(--primary);
+        background: linear-gradient(180deg, #8a0a0a, var(--secondary));
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.12) inset,
+          0 8px 18px -8px rgba(128, 0, 0, 0.8);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn.start {
+        padding: 13px 26px;
+      }
+      .btn.ghost {
+        background: var(--glass-fill);
+        color: var(--variant);
+        box-shadow: 0 1px 0 var(--glass-highlight) inset;
+        border: 1px solid var(--outline-variant);
+        font-weight: 600;
+      }
+      .btn.block {
+        width: 100%;
+        text-align: center;
+      }
+
+      /* add-course ghost card */
+      .add {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 17px;
+        border-radius: var(--r-2xl);
+        border: 1px dashed rgba(180, 197, 224, 0.32);
+        background: rgba(180, 197, 224, 0.04);
+        color: var(--variant);
+        font: 600 14px/1 var(--display);
+        letter-spacing: 0.02em;
+      }
+      .add .plus {
+        color: var(--eagle);
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      /* bottom nav-ish footer link */
+      .footer-link {
+        margin-top: auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 18px 0 22px;
+        font: 600 13px/1 var(--display);
+        letter-spacing: 0.06em;
+        color: var(--variant);
+        border-top: 1px solid var(--outline-variant);
+      }
+      .footer-link b {
+        color: var(--eagle);
+      }
+      .home-indicator {
+        position: absolute;
+        bottom: 9px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 128px;
+        height: 5px;
+        border-radius: 99px;
+        background: rgba(253, 245, 230, 0.32);
+        z-index: 4;
+      }
+
+      /* ── active round hero ────────────────────────────────────────────────── */
+      .hero {
+        padding: 22px 22px 20px;
+        border-radius: var(--r-3xl);
+        background:
+          radial-gradient(
+            130% 120% at 100% 0%,
+            rgba(207, 159, 55, 0.14),
+            transparent 55%
+          ),
+          var(--glass-fill-dark);
+        border: 1px solid var(--outline-variant);
+        border-top: 1px solid var(--glass-highlight);
+      }
+      .hero .eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font: 600 11px/1 var(--data);
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--eagle);
+        margin-bottom: 14px;
+      }
+      .live {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--eagle);
+        box-shadow: 0 0 0 0 rgba(207, 159, 55, 0.6);
+        animation: pulse 2.4s infinite;
+      }
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(207, 159, 55, 0.5);
+        }
+        70% {
+          box-shadow: 0 0 0 8px rgba(207, 159, 55, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(207, 159, 55, 0);
+        }
+      }
+      .hero h2 {
+        font: 700 30px/1.04 var(--display);
+        letter-spacing: -0.025em;
+        margin-bottom: 8px;
+      }
+      .hero .sub {
+        font: 500 14px/1 var(--data);
+        letter-spacing: 0.04em;
+        color: var(--variant);
+        margin-bottom: 20px;
+      }
+      .hero .sub b {
+        color: var(--primary);
+      }
+      .hero-actions {
+        display: flex;
+        gap: 10px;
+      }
+      .hero-actions .btn.start {
+        flex: 1;
+        text-align: center;
+        font-size: 15px;
+        padding: 16px;
+      }
+
+      /* hole progress strip — fills the dead space, glanceable */
+      .progress-card {
+        padding: 18px 18px 16px;
+      }
+      .progress-card .ph {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 14px;
+      }
+      .progress-card .ph .t {
+        font: 600 11px/1 var(--data);
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .progress-card .ph .n {
+        font: 600 12px/1 var(--data);
+        color: var(--variant);
+      }
+      .holes {
+        display: grid;
+        grid-template-columns: repeat(9, 1fr);
+        gap: 7px;
+      }
+      .hole-dot {
+        aspect-ratio: 1;
+        border-radius: 7px;
+        display: grid;
+        place-items: center;
+        font: 600 11px/1 var(--data);
+        color: var(--muted);
+        background: rgba(180, 197, 224, 0.08);
+        border: 1px solid transparent;
+      }
+      .hole-dot.played {
+        color: var(--variant);
+        background: rgba(47, 157, 111, 0.16);
+      }
+      .hole-dot.current {
+        color: var(--surface-lowest);
+        background: var(--eagle);
+        border-color: var(--eagle);
+        box-shadow: 0 0 14px -2px rgba(207, 159, 55, 0.7);
+      }
+
+      /* quick stats row */
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      .stat {
+        padding: 14px 14px 13px;
+        border-radius: var(--r-xl);
+        background: var(--glass-fill);
+        border: 1px solid var(--outline-variant);
+        border-top: 1px solid var(--glass-highlight);
+      }
+      .stat .v {
+        font: 700 22px/1 var(--display);
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+      }
+      .stat .v.gold {
+        color: var(--eagle);
+      }
+      .stat .k {
+        margin-top: 6px;
+        font: 600 9px/1.2 var(--data);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      /* ── round history ────────────────────────────────────────────────────── */
+      .hist-summary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1px;
+        background: var(--outline-variant);
+        border-radius: var(--r-xl);
+        overflow: hidden;
+        border: 1px solid var(--outline-variant);
+      }
+      .hist-summary .cell {
+        background: var(--surface-low);
+        padding: 16px 14px;
+        text-align: center;
+      }
+      .hist-summary .v {
+        font: 700 24px/1 var(--display);
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+      }
+      .hist-summary .v.gold {
+        color: var(--eagle);
+      }
+      .hist-summary .k {
+        margin-top: 6px;
+        font: 600 9px/1 var(--data);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .hist-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        overflow: hidden;
+      }
+      .round {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 15px 16px;
+      }
+      .round .rmeta {
+        flex: 1;
+        min-width: 0;
+      }
+      .round .rname {
+        font: 600 16px/1.15 var(--display);
+        letter-spacing: -0.01em;
+        margin-bottom: 6px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .round .rdate {
+        font: 500 11px/1 var(--data);
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        text-transform: uppercase;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .tag {
+        font: 600 9px/1 var(--data);
+        letter-spacing: 0.1em;
+        color: var(--variant);
+        border: 1px solid var(--outline-variant);
+        border-radius: 5px;
+        padding: 3px 5px;
+      }
+      .score {
+        text-align: right;
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
+      }
+      .score .num {
+        font: 700 26px/1 var(--display);
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+      }
+      .score .topar {
+        font: 700 11px/1 var(--data);
+        letter-spacing: 0.04em;
+        padding: 3px 7px;
+        border-radius: 6px;
+      }
+      .topar.over {
+        color: var(--variant);
+        background: rgba(180, 197, 224, 0.12);
+      }
+      .topar.under {
+        color: var(--surface-lowest);
+        background: var(--eagle);
+      }
+      .topar.even {
+        color: var(--fairway-bright);
+        background: rgba(47, 157, 111, 0.16);
+      }
+      .score .pending {
+        font: 600 11px/1 var(--data);
+        letter-spacing: 0.1em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+      .score .num.muted {
+        color: var(--muted);
+      }
+
+      /* ── landing / onboarding ─────────────────────────────────────────────── */
+      .landing {
+        position: relative;
+        z-index: 2;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 0 30px 30px;
+      }
+      .landing .mark {
+        margin: 30px auto 26px;
+        width: 116px;
+        height: 116px;
+        border-radius: 34px;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(
+          120% 120% at 30% 18%,
+          rgba(207, 159, 55, 0.26),
+          rgba(13, 21, 47, 0.5)
+        );
+        border: 1px solid var(--outline-variant);
+        box-shadow:
+          0 1px 0 var(--glass-highlight) inset,
+          0 30px 60px -28px rgba(207, 159, 55, 0.5);
+      }
+      .landing .mark img {
+        width: 92px;
+        height: 92px;
+        object-fit: contain;
+      }
+      .landing .lw {
+        font: 800 34px/1 var(--display);
+        letter-spacing: 0.12em;
+        margin-bottom: 6px;
+      }
+      .landing .lwsub {
+        font: 500 10px/1 var(--data);
+        letter-spacing: 0.42em;
+        text-transform: uppercase;
+        color: var(--eagle);
+        margin-bottom: 38px;
+      }
+      .landing .tagline {
+        font: 700 27px/1.25 var(--display);
+        letter-spacing: -0.02em;
+        margin-bottom: 16px;
+        max-width: 16ch;
+      }
+      .landing .tagline em {
+        font-style: normal;
+        color: var(--eagle);
+      }
+      .landing .blurb {
+        font: 400 14px/1.6 var(--display);
+        color: var(--variant);
+        max-width: 30ch;
+        margin-bottom: auto;
+      }
+      .landing .cta-wrap {
+        width: 100%;
+        margin-top: 28px;
+      }
+      .landing .perm {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-bottom: 16px;
+        font: 500 11px/1.4 var(--data);
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+      .landing .btn.block {
+        padding: 17px;
+        font-size: 15px;
+      }
+
+      .callouts {
+        margin-top: 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+      }
+      .callout {
+        display: flex;
+        gap: 9px;
+        font: 400 12.5px/1.5 var(--display);
+        color: var(--variant);
+      }
+      .callout b {
+        color: var(--eagle);
+        font-weight: 600;
+      }
+      .callout .dot {
+        flex: 0 0 auto;
+        margin-top: 6px;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--eagle);
+      }
+
+      /* staggered load-in */
+      .body > *,
+      .landing > * {
+        animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      }
+      .body > *:nth-child(2) {
+        animation-delay: 0.05s;
+      }
+      .body > *:nth-child(3) {
+        animation-delay: 0.1s;
+      }
+      .body > *:nth-child(4) {
+        animation-delay: 0.15s;
+      }
+      .body > *:nth-child(5) {
+        animation-delay: 0.2s;
+      }
+      .body > *:nth-child(6) {
+        animation-delay: 0.25s;
+      }
+      .body > *:nth-child(7) {
+        animation-delay: 0.3s;
+      }
+      @keyframes rise {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- shared SVG topographic contour motif, referenced by each screen -->
+    <svg width="0" height="0" style="position: absolute">
+      <symbol
+        id="topo"
+        viewBox="0 0 372 784"
+        preserveAspectRatio="xMidYMid slice"
+      >
+        <g fill="none" stroke="#2f9d6f" stroke-width="1" opacity="0.16">
+          <path d="M-20 120 C80 80 150 180 230 150 S360 90 420 140" />
+          <path d="M-20 175 C70 140 160 235 240 205 S360 150 420 200" />
+          <path d="M-20 235 C90 200 150 300 250 265 S370 215 430 260" />
+          <path d="M-20 560 C70 520 170 610 250 585 S360 520 430 560" />
+          <path d="M-20 620 C80 585 160 670 250 645 S360 590 430 625" />
+          <path d="M-20 685 C70 650 170 740 250 715 S360 660 430 695" />
+        </g>
+        <g fill="none" stroke="#cf9f37" stroke-width="1" opacity="0.1">
+          <path d="M-20 145 C80 105 150 205 230 175 S360 115 420 165" />
+          <path d="M-20 595 C70 555 170 645 250 620 S360 555 430 595" />
+        </g>
+      </symbol>
+    </svg>
+
+    <div class="page">
+      <div class="page-head">
+        <div class="kicker">Eagle Eye · Phase 7 polish</div>
+        <h1>Home, History &amp; Landing — direction A</h1>
+        <p>
+          A refined <strong>"premium instrument"</strong> direction on the real
+          <code>lib/theme.ts</code> palette (oklch navy / cream / maroon /
+          golden eagle, Sora). Frosted-glass cards, a faint topographic contour
+          motif for map-context atmosphere, and tabular numerals for all data.
+          Each fix below maps to a known <code>UI_CRITIQUE.md</code> tell — see
+          the callouts.
+        </p>
+      </div>
+
+      <div class="frames">
+        <!-- ════════════════ LANDING / ONBOARDING ════════════════ -->
+        <div class="frame-col">
+          <div class="frame-label">
+            <b>Landing</b><span>onboarding · new</span>
+          </div>
+          <div class="phone">
+            <div class="screen">
+              <svg class="contours"><use href="#topo" /></svg>
+              <div class="statusbar">
+                <span>11:52</span>
+                <div class="dots">
+                  <span>●●●</span><span>📶</span>
+                  <div class="battery">53</div>
+                </div>
+              </div>
+              <div class="landing">
+                <div class="mark">
+                  <img src="../../assets/icon.svg" alt="" />
+                </div>
+                <div class="lw">EAGLE EYE</div>
+                <div class="lwsub">Golf Rangefinder</div>
+                <div class="tagline">
+                  Stand on the tee.<br />Know the <em>number</em>.
+                </div>
+                <div class="blurb">
+                  Front, center, and back of every green — live, offline, no
+                  signal required.
+                </div>
+                <div class="cta-wrap">
+                  <div class="perm">
+                    📍 We'll ask for location to measure distances
+                  </div>
+                  <button class="btn block">Get Started</button>
+                </div>
+              </div>
+              <div class="home-indicator"></div>
+            </div>
+          </div>
+          <div class="callouts">
+            <div class="callout">
+              <span class="dot"></span>
+              <div>
+                <b>New screen</b> — fills the Phase 7 onboarding gap with a
+                single grant + CTA.
+              </div>
+            </div>
+            <div class="callout">
+              <span class="dot"></span>
+              <div>
+                <b>Logo, sized right</b> — the eagle reads as a balanced badge,
+                never cropped.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════════════ HOME — COURSE LIST ════════════════ -->
+        <div class="frame-col">
+          <div class="frame-label"><b>Home</b><span>course list</span></div>
+          <div class="phone">
+            <div class="screen">
+              <svg class="contours"><use href="#topo" /></svg>
+              <div class="statusbar">
+                <span>11:52</span>
+                <div class="dots">
+                  <span>●●●</span><span>📶</span>
+                  <div class="battery">53</div>
+                </div>
+              </div>
+              <div class="topbar">
+                <div class="brand">
+                  <img src="../../assets/icon.svg" alt="" />
+                </div>
+                <div class="wordmark">
+                  <b>EAGLE EYE</b><span>Golf Rangefinder</span>
+                </div>
+                <div class="iconbtn">☰</div>
+              </div>
+              <div class="topbar-rule"></div>
+              <div class="body">
+                <div class="section-label">Start a round</div>
+
+                <div class="card course">
+                  <div class="meta">
+                    <div class="name">Presidio Golf Course</div>
+                    <div class="status ready">
+                      <span class="chip-dot"></span>Imagery ready
+                    </div>
+                  </div>
+                  <button class="btn start">Start</button>
+                </div>
+
+                <div class="card course">
+                  <div class="meta">
+                    <div class="name">TPC Harding Park</div>
+                    <div class="status ready">
+                      <span class="chip-dot"></span>Imagery ready
+                    </div>
+                  </div>
+                  <button class="btn start">Start</button>
+                </div>
+
+                <div class="card course">
+                  <div class="meta">
+                    <div class="name">Crystal Springs</div>
+                    <div class="status">
+                      <span
+                        class="chip-dot"
+                        style="
+                          background: var(--eagle);
+                          box-shadow: 0 0 0 3px rgba(207, 159, 55, 0.18);
+                        "
+                      ></span
+                      >Downloading imagery
+                    </div>
+                    <div class="dl"><i style="width: 68%"></i></div>
+                    <div class="dl-label">68% · ~40&nbsp;MB</div>
+                  </div>
+                  <button class="btn start ghost">Start</button>
+                </div>
+
+                <div class="card course">
+                  <div class="meta">
+                    <div class="name">Stinkin' Lincoln</div>
+                    <div class="status ready">
+                      <span class="chip-dot"></span>Imagery ready
+                    </div>
+                  </div>
+                  <button class="btn start">Start</button>
+                </div>
+
+                <div class="add">
+                  <span class="plus">+</span> Add Course · Find Nearby
+                </div>
+
+                <div class="footer-link">Round History <b>›</b></div>
+              </div>
+              <div class="home-indicator"></div>
+            </div>
+          </div>
+          <div class="callouts">
+            <div class="callout">
+              <span class="dot"></span>
+              <div>
+                <b>Logo fix</b> — 30px contained mark in a glass badge + a real
+                wordmark lockup.
+              </div>
+            </div>
+            <div class="callout">
+              <span class="dot"></span>
+              <div>
+                <b>"Ready" as a chip</b>, not a full-width bar — the bar only
+                appears mid-download.
+              </div>
+            </div>
+            <div class="callout">
+              <span class="dot"></span>
+              <div>
+                <b>One right gutter</b> — every Start button shares an edge.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════════════ HOME — ACTIVE ROUND ════════════════ -->
+        <div class="frame-col">
+          <div class="frame-label"><b>Home</b><span>active round</span></div>
+          <div class="phone">
+            <div class="screen">
+              <svg class="contours"><use href="#topo" /></svg>
+              <div class="statusbar">
+                <span>11:52</span>
+                <div class="dots">
+                  <span>●●●</span><span>📶</span>
+                  <div class="battery">53</div>
+                </div>
+              </div>
+              <div class="topbar">
+                <div class="brand">
+                  <img src="../../assets/icon.svg" alt="" />
+                </div>
+                <div class="wordmark">
+                  <b>EAGLE EYE</b><span>Golf Rangefinder</span>
+                </div>
+                <div class="iconbtn">☰</div>
+              </div>
+              <div class="topbar-rule"></div>
+              <div class="body">
+                <div class="hero">
+                  <div class="eyebrow">
+                    <span class="live"></span>Active round
+                  </div>
+                  <h2>Presidio Golf Course</h2>
+                  <div class="sub">
+                    Hole <b>8</b> of 18 · started <b>10:38&nbsp;PM</b>
+                  </div>
+                  <div class="hero-actions">
+                    <button class="btn start">Resume Round</button>
+                    <button class="btn ghost">End</button>
+                  </div>
+                </div>
+
+                <div class="card progress-card">
+                  <div class="ph">
+                    <span class="t">Through the bag</span
+                    ><span class="n">7 / 18 played</span>
+                  </div>
+                  <div class="holes">
+                    <div class="hole-dot played">1</div>
+                    <div class="hole-dot played">2</div>
+                    <div class="hole-dot played">3</div>
+                    <div class="hole-dot played">4</div>
+                    <div class="hole-dot played">5</div>
+                    <div class="hole-dot played">6</div>
+                    <div class="hole-dot played">7</div>
+                    <div class="hole-dot current">8</div>
+                    <div class="hole-dot">9</div>
+                    <div class="hole-dot">10</div>
+                    <div class="hole-dot">11</div>
+                    <div class="hole-dot">12</div>
+                    <div class="hole-dot">13</div>
+                    <div class="hole-dot">14</div>
+                    <div class="hole-dot">15</div>
+                    <div class="hole-dot">16</div>
+                    <div class="hole-dot">17</div>
+                    <div class="hole-dot">18</div>
+                  </div>
+                </div>
+
+                <div class="stats">
+                  <div class="stat">
+                    <div class="v gold">8</div>
+                    <div class="k">Current<br />hole</div>
+                  </div>
+                  <div class="stat">
+                    <div class="v">1:14</div>
+                    <div class="k">Elapsed</div>
+                  </div>
+                  <div class="stat">
+                    <div class="v">Par 4</div>
+                    <div class="k">This<br />hole</div>
+                  </div>
+                </div>
+
+                <div class="card course" style="margin-top: 2px">
+                  <div class="meta">
+                    <div class="name" style="font-size: 15px; margin-bottom: 0">
+                      Refetch all imagery
+                    </div>
+                  </div>
+                  <div class="iconbtn">⟳</div>
+                </div>
+
+                <div class="footer-link">Round History <b>›</b></div>
+              </div>
+              <div class="home-indicator"></div>
+            </div>
+          </div>
+          <div class="callouts">
+            <div class="callout">
+              <span class="dot"></span>
+              <div>
+                <b>Dead space filled</b> — a 1–18 progress strip + quick stats
+                make the page glanceable.
+              </div>
+            </div>
+            <div class="callout">
+              <span class="dot"></span>
+              <div>
+                <b>Live pulse + context</b> — "Hole 8 of 18", current hole glows
+                gold.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════════════ ROUND HISTORY ════════════════ -->
+        <div class="frame-col">
+          <div class="frame-label">
+            <b>Round History</b><span>all finished rounds</span>
+          </div>
+          <div class="phone">
+            <div class="screen">
+              <svg class="contours"><use href="#topo" /></svg>
+              <div class="statusbar">
+                <span>11:52</span>
+                <div class="dots">
+                  <span>●●●</span><span>📶</span>
+                  <div class="battery">53</div>
+                </div>
+              </div>
+              <div class="topbar">
+                <div class="iconbtn">‹</div>
+                <div class="wordmark" style="margin-left: 4px">
+                  <b style="font-size: 15px; letter-spacing: 0.08em"
+                    >ROUND HISTORY</b
+                  ><span>All finished rounds</span>
+                </div>
+              </div>
+              <div class="topbar-rule"></div>
+              <div class="body">
+                <div class="hist-summary">
+                  <div class="cell">
+                    <div class="v">24</div>
+                    <div class="k">Rounds</div>
+                  </div>
+                  <div class="cell">
+                    <div class="v gold">82</div>
+                    <div class="k">Best</div>
+                  </div>
+                  <div class="cell">
+                    <div class="v">88</div>
+                    <div class="k">Avg</div>
+                  </div>
+                </div>
+
+                <div class="hist-list">
+                  <div class="card round">
+                    <div class="rmeta">
+                      <div class="rname">Presidio Golf Course</div>
+                      <div class="rdate">
+                        Jun 4, 2026 <span class="tag">18</span>
+                      </div>
+                    </div>
+                    <div class="score">
+                      <div class="num">84</div>
+                      <div class="score-wrap">
+                        <span class="topar over">+13</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="card round">
+                    <div class="rmeta">
+                      <div class="rname">Stinkin' Lincoln</div>
+                      <div class="rdate">
+                        Jun 4, 2026 <span class="tag">18</span>
+                      </div>
+                    </div>
+                    <div class="score">
+                      <div class="num">82</div>
+                      <span class="topar under">−1</span>
+                    </div>
+                  </div>
+
+                  <div class="card round">
+                    <div class="rmeta">
+                      <div class="rname">Peacock Gap</div>
+                      <div class="rdate">
+                        Jun 4, 2026 <span class="tag">9</span>
+                      </div>
+                    </div>
+                    <div class="score">
+                      <div class="num">41</div>
+                      <span class="topar even">E</span>
+                    </div>
+                  </div>
+
+                  <div class="card round">
+                    <div class="rmeta">
+                      <div class="rname">TPC Harding Park</div>
+                      <div class="rdate">
+                        Jun 2, 2026 <span class="tag">18</span>
+                      </div>
+                    </div>
+                    <div class="score">
+                      <div class="num">90</div>
+                      <span class="topar over">+18</span>
+                    </div>
+                  </div>
+
+                  <div class="card round">
+                    <div class="rmeta">
+                      <div class="rname">Presidio Golf Course</div>
+                      <div class="rdate">
+                        Jun 1, 2026 <span class="tag">18</span>
+                      </div>
+                    </div>
+                    <div class="score">
+                      <div class="num muted">—</div>
+                      <span class="pending">No card</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="home-indicator"></div>
+              </div>
+            </div>
+          </div>
+          <div class="callouts">
+            <div class="callout">
+              <span class="dot"></span>
+              <div>
+                <b>Score is real</b> — big tabular number + a to-par chip (gold
+                = under, green = even).
+              </div>
+            </div>
+            <div class="callout">
+              <span class="dot"></span>
+              <div>
+                <b>Summary strip</b> turns a flat list into a record;
+                <b>9/18 tag</b> + dated rows.
+              </div>
+            </div>
+            <div class="callout">
+              <span class="dot"></span>
+              <div>
+                The placeholder dash now means <b>one specific thing</b>: round
+                saved, no card entered.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

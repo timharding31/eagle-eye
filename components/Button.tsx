@@ -11,7 +11,7 @@ import {
 import { colors, radius, shadows, space, type } from '@/lib/theme'
 import { GlassBackdrop } from './GlassSurface'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'glass' | 'golden'
 type Size = 'md' | 'lg'
 
 interface ButtonProps {
@@ -48,6 +48,7 @@ export function Button({
         style,
       ]}
     >
+      {variant === 'glass' && <GlassBackdrop />}
       {leading}
       {children || (
         <Text style={[styles.label, variantLabel[variant]]}>{label}</Text>
@@ -68,6 +69,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: 'Sora_700Bold',
     letterSpacing: 0.3,
+    fontSize: 16,
   },
   disabled: { opacity: 0.45 },
 })
@@ -90,13 +92,31 @@ const variantContainer: Record<Variant, ViewStyle> = {
     borderColor: colors.outlineVariant,
   },
   danger: { backgroundColor: colors.errorContainer, ...shadows.cta },
+  glass: {
+    // Backdrop comes from <GlassBackdrop/> (real blur + translucent fill);
+    // the container stays transparent and just clips it to the rounded rect.
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.outlineVariant,
+    // 1px cream top highlight — same lifted-glass cue as the readout panels.
+    borderTopWidth: 1,
+    borderTopColor: colors.glassHighlight,
+  },
+  golden: {
+    backgroundColor: colors.goldenEagle,
+    borderColor: colors.goldenEagle,
+    overflow: 'hidden',
+  },
 }
 
 const variantLabel: Record<Variant, TextStyle> = {
-  primary: { color: colors.primary, fontSize: 17 },
-  secondary: { color: colors.onSurface, fontSize: 16 },
-  ghost: { color: colors.onSurfaceVariant, fontSize: 15 },
-  danger: { color: colors.primary, fontSize: 17 },
+  primary: { color: colors.primary },
+  golden: { color: colors.surfaceHigh },
+  secondary: { color: colors.onSurface },
+  ghost: { color: colors.onSurface },
+  glass: { color: colors.onSurface },
+  danger: { color: colors.primary },
 }
 
 interface IconButtonBaseProps {
@@ -114,6 +134,7 @@ interface IconButtonBaseProps {
   // solid instrument look used by the in-round control stack; pass false for
   // the lighter, more recessive glass used by top-chrome controls.
   dark?: boolean
+  hitSlop?: number | null
 }
 
 type IconButtonProps = IconButtonBaseProps &
@@ -133,6 +154,7 @@ export function IconButton({
   dark = true,
   width,
   height,
+  hitSlop,
 }: IconButtonProps) {
   return (
     <TouchableOpacity
@@ -140,6 +162,7 @@ export function IconButton({
       disabled={disabled}
       accessibilityLabel={label}
       activeOpacity={0.85}
+      hitSlop={hitSlop}
       style={[
         iconBtnStyles.base,
         typeof size === 'number' && (size ?? width) > 56 && iconBtnStyles.large,

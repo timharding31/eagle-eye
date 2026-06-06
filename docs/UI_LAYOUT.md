@@ -88,9 +88,12 @@ prop-drilling. `scene.tsx` (the `HoleSceneProvider`) is the single owner of:
 Nothing here hardcodes color, spacing, or type — every value comes from
 `lib/theme.ts` tokens (`colors`, `space`, `radius`, `type`, `shadows`, `fonts`).
 The palette is generated from a handful of oklch "knob" bases at the top of
-`theme.ts`; retheme by editing those, not the components. The glass panels use
-`colors.glass` / `colors.glassSoft` (opaque dark surface at high alpha + a
-hairline `outlineVariant` border) so on-screen text stays legible over bright
-satellite imagery.
+`theme.ts`; retheme by editing those, not the components. The glass panels are
+**real frosted glass** (`components/GlassSurface.tsx`): a live `expo-blur`
+backdrop blur of the map under a translucent navy fill (`colors.glassFill` /
+`glassFillDark`), a hairline `outlineVariant` border, and a 1px cream top
+highlight (`colors.glassHighlight`). The blur needs the map mounted with
+`androidView="texture"` and a `blurTarget` threaded via `GlassRoot` /
+`GlassBlurTarget` — see the header comment in `GlassSurface.tsx`.
 
 See `UI_CRITIQUE.md` for an assessment of this layout and concrete suggestions.

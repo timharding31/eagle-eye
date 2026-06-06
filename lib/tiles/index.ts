@@ -9,12 +9,73 @@ import { create } from 'zustand'
 
 import type { BBox } from '@/lib/course/types'
 
-const ESRI_SATELLITE_TILES =
-  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-
 const OPENFREEMAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty'
 
 export const vectorStyle = OPENFREEMAP_STYLE
+
+// ── Satellite provider (SPIKE: ESRI ↔ Mapbox) ──────────────────────────────
+// Flip SATELLITE_PROVIDER to compare imagery providers on-device. ESRI is the
+// shipped default (no key, offline-pack friendly). Mapbox is under evaluation
+// for nicer color + sharpness at the Presidio (ESRI only looks good at z21).
+// See docs/design-experiments/mapbox-satellite-spike.md for the tradeoffs —
+// notably Mapbox needs an access token and its ToS restricts the offline-pack
+// caching this app relies on, so 'mapbox' is currently a LIVE-RENDER-ONLY spike
+// (the offline downloader below still pulls the hosted ESRI style).
+type SatelliteProviderId = 'esri' | 'mapbox'
+const SATELLITE_PROVIDER: SatelliteProviderId = 'esri'
+
+// Public Mapbox token. Set EXPO_PUBLIC_MAPBOX_TOKEN in .env (Expo inlines
+// EXPO_PUBLIC_* into the bundle at build). Never commit a token; use a
+// URL-restricted pk.* token.
+const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? ''
+
+type SatelliteProvider = {
+  // XYZ tile template. ESRI is {z}/{y}/{x}; Mapbox is {z}/{x}/{y}.
+  tiles: string
+  // Pixels the source returns per tile (ESRI 256; Mapbox @2x retina 512).
+  nativeTileSize: number
+  // Deeper-zoom oversample factor (power of two): renderTileSize =
+  // nativeTileSize / oversample. 2 ⇒ MapLibre fetches ~1 level deeper than the
+  // camera zoom, so the overview matches screen resolution instead of blurring.
+  oversample: number
+  // Deepest native zoom the source serves. Clamps offline enumeration and the
+  // render source maxzoom. ESRI ~21 over SF; Mapbox satellite advertises 22.
+  sourceMaxzoom: number
+  attribution: string
+}
+
+const PROVIDERS: Record<SatelliteProviderId, SatelliteProvider> = {
+  esri: {
+    tiles:
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    nativeTileSize: 256,
+    oversample: 2,
+    sourceMaxzoom: 21,
+    attribution: 'Tiles © Esri',
+  },
+  mapbox: {
+    // @2x ⇒ 512px retina imagery (sharper); .jpg90 ⇒ high-quality JPEG.
+    tiles: `https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=${MAPBOX_TOKEN}`,
+    nativeTileSize: 512,
+    oversample: 2,
+    sourceMaxzoom: 22,
+    attribution: '© Mapbox © Maxar',
+  },
+}
+
+function activeProvider(): SatelliteProvider {
+  if (SATELLITE_PROVIDER === 'mapbox' && !MAPBOX_TOKEN) {
+    // Don't render a blank map on a missing token — fall back to ESRI and make
+    // the misconfiguration obvious in the logs.
+    console.warn(
+      '[tiles] SATELLITE_PROVIDER=mapbox but EXPO_PUBLIC_MAPBOX_TOKEN is unset; falling back to ESRI.',
+    )
+    return PROVIDERS.esri
+  }
+  return PROVIDERS[SATELLITE_PROVIDER]
+}
+
+const provider = activeProvider()
 
 const MIN_ZOOM = 16
 // ESRI World Imagery serves real native tiles to z20 (~0.12 m/px) over our SF
@@ -29,9 +90,10 @@ const SATELLITE_MAX_ZOOM_BY_COURSE: Record<string, number> = {
   presidio: 21,
 }
 // The hosted offline style's source maxzoom must be ≥ the deepest per-course
-// pack maxZoom, or the downloader won't enumerate that level. Keep this in sync
-// with the "maxzoom" in docs/satellite-style.json.
-const SATELLITE_SOURCE_MAXZOOM = 21
+// pack maxZoom, or the downloader won't enumerate that level. Keep the ESRI
+// value in sync with the "maxzoom" in docs/satellite-style.json. (Mapbox's
+// hosted style is not wired up yet — see the spike note above.)
+const SATELLITE_SOURCE_MAXZOOM = provider.sourceMaxzoom
 // Vector (OpenFreeMap) detail is plenty at z20; no per-course need.
 const VECTOR_MAX_ZOOM = 20
 
@@ -43,35 +105,36 @@ export function satelliteMaxZoom(courseId: string): number {
 // boundary don't hit missing tiles.
 const BBOX_EXPAND_PCT = 0.07
 
-// Render-side oversampling. ESRI tiles are natively 256 px; declaring a SMALLER
-// tileSize makes MapLibre fetch DEEPER (sharper) tiles for the same camera zoom:
-//   requestedTileZoom ≈ round(cameraZoom + log2(256 / tileSize))
-// At 256 the hole-overview (camera ~z16.5) pulls z16–17, which is coarser than
-// the screen can show → blurry when zoomed out. At 128 the overview pulls z17–18
-// (crisp, ~matches the screen) and zoom-to-green reaches the z21 cap. Each step
-// down is ~4× the tiles drawn per frame — the offline pack already holds every
-// level (it downloads the full MIN_ZOOM..maxZoom pyramid), so this only affects
-// live fetch volume + GPU work, NOT pack size, and needs no refetch.
-// Range hint: 256 (native, soft overview) – 64 (very sharp, 16× tiles). 128 is
-// the sweet spot: overview matches screen resolution without overdrawing.
+// Render-side oversampling. Declaring a SMALLER tileSize than the source's
+// native size makes MapLibre fetch DEEPER (sharper) tiles for the same camera
+// zoom:
+//   requestedTileZoom ≈ round(cameraZoom + log2(nativeTileSize / renderTileSize))
+// At native size the hole-overview (camera ~z16.5) pulls z16–17, coarser than
+// the screen can show → blurry when zoomed out. At oversample 2 the overview
+// pulls z17–18 (crisp, ~matches the screen) and zoom-to-green reaches the cap.
+// Each step down is ~4× the tiles drawn per frame — the offline pack already
+// holds every level, so this only affects live fetch volume + GPU work, NOT
+// pack size, and needs no refetch.
+// Derived per provider so ESRI (256 native) and Mapbox (512 @2x) land on the
+// same effective +1-level oversample: 256/2 = 128, 512/2 = 256.
 // NOTE: applies only to the on-screen render style. The hosted offline style
-// (docs/satellite-style.json) keeps tileSize 256 so the downloader enumerates
-// the pyramid by native zoom.
-const SATELLITE_RENDER_TILE_SIZE = 128
+// (docs/satellite-style.json) keeps the native tileSize so the downloader
+// enumerates the pyramid by native zoom.
+const SATELLITE_RENDER_TILE_SIZE = provider.nativeTileSize / provider.oversample
 
 function buildSatelliteStyle(maxzoom: number): StyleSpecification {
   return {
     version: 8,
     sources: {
-      esri: {
+      satellite: {
         type: 'raster',
-        tiles: [ESRI_SATELLITE_TILES],
+        tiles: [provider.tiles],
         tileSize: SATELLITE_RENDER_TILE_SIZE,
-        attribution: 'Tiles © Esri',
+        attribution: provider.attribution,
         maxzoom,
       },
     },
-    layers: [{ id: 'esri-satellite', type: 'raster', source: 'esri' }],
+    layers: [{ id: 'satellite', type: 'raster', source: 'satellite' }],
   }
 }
 
