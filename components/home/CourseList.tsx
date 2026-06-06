@@ -12,7 +12,7 @@ import { useHomeScene } from './scene'
 // The "START A ROUND" region: the installed-Course list, each row a glass card
 // with a routing thumbnail, name, imagery-status chip, and a Start button.
 export function CourseList() {
-  const { courses, busy, start, remove } = useHomeScene()
+  const { courses, busy, start, remove, retry } = useHomeScene()
 
   return (
     <View style={styles.section}>
@@ -27,6 +27,7 @@ export function CourseList() {
             busy={busy}
             onStart={() => start(c.slug)}
             onRemove={c.source !== 'bundled' ? () => remove(c) : undefined}
+            onRetry={() => retry(c)}
           />
         ))
       )}
@@ -39,11 +40,13 @@ function CourseRow({
   busy,
   onStart,
   onRemove,
+  onRetry,
 }: {
   course: CourseSummary
   busy: boolean
   onStart: () => void
   onRemove?: () => void
+  onRetry: () => void
 }) {
   const status = usePrefetchStatus(course.slug)
   const isReady = status?.satellite.state === 'complete'
@@ -61,7 +64,13 @@ function CourseRow({
           <Text style={styles.courseName} numberOfLines={1}>
             {course.name}
           </Text>
-          {!isReady && <ImageryChip status={status} installed={!!onRemove} />}
+          {!isReady && (
+            <ImageryChip
+              status={status}
+              installed={!!onRemove}
+              onRetry={onRetry}
+            />
+          )}
         </View>
         <Button
           label="Start"
@@ -76,15 +85,18 @@ function CourseRow({
 }
 
 // Compact imagery-status chip: a colored dot + a terse status line. Ready =
-// bright green; downloading = gold + NN%; error/idle = muted. Long-press-to-
-// remove is folded into the line for installed courses so the gesture stays
-// discoverable.
+// bright green; downloading = gold + NN%; error/idle = muted. On error the row
+// becomes tappable to re-download (the only recovery path now that the home
+// "Refetch" button is gone); otherwise long-press-to-remove is folded into the
+// line for installed courses so the gesture stays discoverable.
 function ImageryChip({
   status,
   installed,
+  onRetry,
 }: {
   status: PrefetchStatus | null
   installed: boolean
+  onRetry: () => void
 }) {
   const sat = status?.satellite
   const state = sat?.state ?? 'idle'
@@ -107,16 +119,26 @@ function ImageryChip({
     text = 'Download failed'
   }
 
+  const canRetry = state === 'error'
+
   return (
-    <View style={styles.chipRow}>
+    <TouchableOpacity
+      style={styles.chipRow}
+      onPress={canRetry ? onRetry : undefined}
+      disabled={!canRetry}
+      hitSlop={canRetry ? 8 : undefined}
+      activeOpacity={0.7}
+    >
       <View style={[styles.chipDot, { backgroundColor: dotColor }]} />
       <Text style={[styles.chipText, { color: textColor }]} numberOfLines={1}>
         {text}
-        {installed ? (
+        {canRetry ? (
+          <Text style={styles.chipRetry}>{'  ·  tap to retry'}</Text>
+        ) : installed ? (
           <Text style={styles.chipInstalled}>{'  ·  hold to remove'}</Text>
         ) : null}
       </Text>
-    </View>
+    </TouchableOpacity>
   )
 }
 
@@ -145,4 +167,5 @@ const styles = StyleSheet.create({
   chipDot: { width: 6, height: 6, borderRadius: 3 },
   chipText: { ...type.labelXs },
   chipInstalled: { color: colors.onSurfaceMuted },
+  chipRetry: { color: colors.goldenEagle },
 })

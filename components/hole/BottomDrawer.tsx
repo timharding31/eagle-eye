@@ -170,22 +170,8 @@ function HoleGrid({
                   <View
                     style={{ justifyContent: 'center', alignItems: 'center' }}
                   >
-                    <Text
-                      style={[
-                        drawer.gridCellNum,
-                        // active && drawer.gridCellNumActive,
-                      ]}
-                    >
-                      {h.num}
-                    </Text>
-                    <Text
-                      style={[
-                        drawer.gridCellPar,
-                        active && drawer.gridCellParActive,
-                      ]}
-                    >
-                      PAR {h.par}
-                    </Text>
+                    <Text style={[drawer.gridCellNum]}>{h.num}</Text>
+                    <Text style={[drawer.gridCellPar]}>PAR {h.par}</Text>
                   </View>
                 }
               />
@@ -312,19 +298,16 @@ const drawer = StyleSheet.create({
   },
   gridCellSpacer: { flex: 1 },
   gridCellNum: {
-    color: colors.primary,
+    color: colors.onSurface,
     fontFamily: 'Sora_700Bold',
     fontSize: 18,
     lineHeight: 20,
   },
   gridCellPar: {
-    color: colors.onSurfaceVariant,
+    color: colors.onSurface,
     fontFamily: 'Sora_600SemiBold',
     fontSize: 9,
     letterSpacing: 1.2,
-  },
-  gridCellParActive: {
-    color: colors.onSurface,
   },
 })
 

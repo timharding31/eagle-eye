@@ -32,6 +32,7 @@ export type CourseSummary = {
   name: string
   bounds: BBox
   source: CourseSource
+  holeCount: number
 }
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
@@ -59,6 +60,7 @@ export function listBundledCourses(): CourseSummary[] {
     name: c.name,
     bounds: c.bounds,
     source: c.source,
+    holeCount: c.holes.length,
   }))
 }
 
@@ -189,6 +191,7 @@ export async function listInstalledCourses(): Promise<CourseSummary[]> {
     name: r.name,
     bounds: JSON.parse(r.bounds) as BBox,
     source: r.source,
+    holeCount: (JSON.parse(r.rawDataBlob) as Course).holes.length,
   }))
 }
 

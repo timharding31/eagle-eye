@@ -11,7 +11,7 @@ import {
 import { colors, radius, shadows, space, type } from '@/lib/theme'
 import { GlassBackdrop } from './GlassSurface'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'glass' | 'golden'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'glass'
 type Size = 'md' | 'lg'
 
 interface ButtonProps {
@@ -103,16 +103,10 @@ const variantContainer: Record<Variant, ViewStyle> = {
     borderTopWidth: 1,
     borderTopColor: colors.glassHighlight,
   },
-  golden: {
-    backgroundColor: colors.goldenEagle,
-    borderColor: colors.goldenEagle,
-    overflow: 'hidden',
-  },
 }
 
 const variantLabel: Record<Variant, TextStyle> = {
   primary: { color: colors.primary },
-  golden: { color: colors.surfaceHigh },
   secondary: { color: colors.onSurface },
   ghost: { color: colors.onSurface },
   glass: { color: colors.onSurface },

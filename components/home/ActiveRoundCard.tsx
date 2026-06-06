@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Animated, StyleSheet, Text, View } from 'react-native'
 
 import { Button } from '@/components/Button'
 import { GlassSurface } from '@/components/GlassSurface'
-import { loadCourse, type Course } from '@/lib/course'
 import { colors, radius, space, type } from '@/lib/theme'
 
 import { useHomeScene } from './scene'
@@ -12,25 +11,17 @@ import { useHomeScene } from './scene'
 // course name, hole/started line, and Resume / End actions. Shown in place of
 // the Course list whenever a Round is in progress.
 export function ActiveRoundCard() {
-  const { activeRound, stale, busy, resume, endActive } = useHomeScene()
-  const [course, setCourse] = useState<Course | null>(null)
-
-  const courseId = activeRound?.courseId
-  useEffect(() => {
-    if (!courseId) return
-    let cancelled = false
-    loadCourse(courseId)
-      .then(c => !cancelled && setCourse(c))
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [courseId])
-
-  const total = useMemo(() => course?.holes.length || 18, [course])
+  const { activeRound, courses, stale, busy, resume, endActive } =
+    useHomeScene()
 
   if (!activeRound) return null
-  const courseName = course?.name ?? activeRound.courseId
+
+  // Name + hole count come straight from the scene's Course list (the single
+  // source of truth) — no separate loadCourse, so the hero renders complete on
+  // first paint instead of flashing the slug and a default count.
+  const summary = courses.find(c => c.slug === activeRound.courseId)
+  const courseName = summary?.name ?? activeRound.courseId
+  const total = summary?.holeCount ?? 18
 
   return (
     <View style={styles.section}>
@@ -160,7 +151,6 @@ const styles = StyleSheet.create({
   heroTitle: { ...type.headlineLg, color: colors.primary },
   heroSub: {
     ...type.bodyMd,
-    ...type.labelSm,
     color: colors.onSurface,
     marginTop: space.md,
   },

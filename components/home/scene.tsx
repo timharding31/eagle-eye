@@ -16,7 +16,7 @@ import {
   type CourseSummary,
 } from '@/lib/course'
 import { endRound, isStale, startRound, useActiveRound } from '@/lib/round'
-import { prefetchForCourse, prefetchStatus } from '@/lib/tiles'
+import { prefetchForCourse, prefetchStatus, retryPrefetch } from '@/lib/tiles'
 
 // The single owner of home-screen state shared across regions: the installed
 // Course list, the active Round, and the start/resume/end/remove actions. The
@@ -37,6 +37,7 @@ interface HomeScene {
   err: string | null
   start: (slug: string) => void
   remove: (course: CourseSummary) => void
+  retry: (course: CourseSummary) => void
   endActive: () => void
   resume: () => void
 }
@@ -118,6 +119,12 @@ export function HomeSceneProvider({ children }: { children: ReactNode }) {
     )
   }, [])
 
+  // Re-download imagery for a course whose prefetch errored. Fire-and-forget —
+  // the prefetch store drives the row's status chip; surface only hard failures.
+  const retry = useCallback((course: CourseSummary) => {
+    retryPrefetch(course.slug, course.bounds).catch(e => setErr(String(e)))
+  }, [])
+
   const endActive = useCallback(async () => {
     if (!activeRound) return
     setErr(null)
@@ -145,10 +152,22 @@ export function HomeSceneProvider({ children }: { children: ReactNode }) {
       err,
       start,
       remove,
+      retry,
       endActive,
       resume,
     }),
-    [courses, activeRound, stale, busy, err, start, remove, endActive, resume],
+    [
+      courses,
+      activeRound,
+      stale,
+      busy,
+      err,
+      start,
+      remove,
+      retry,
+      endActive,
+      resume,
+    ],
   )
 
   return (
