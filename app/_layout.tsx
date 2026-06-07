@@ -15,6 +15,8 @@ import {
 
 import { db } from '@/db'
 import migrations from '@/db/migrations'
+import { GlassRoot } from '@/components/GlassSurface'
+import { PersistentBackdrop } from '@/components/MapBackdrop'
 import { ensureHydrated } from '@/lib/round'
 import { colors, type } from '@/lib/theme'
 
@@ -45,13 +47,23 @@ export default function RootLayout() {
       ) : !success || !fontsLoaded ? (
         <BootMessage text="Preparing…" busy />
       ) : (
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.surface },
-            animation: 'fade',
-          }}
-        />
+        // The satellite backdrop is mounted ONCE here, behind the router stack,
+        // inside the app-wide GlassRoot. Screens render transparent on top
+        // (contentStyle is transparent), so list-to-list navigation no longer
+        // re-decodes the photo or re-creates the blur target, and the 'fade'
+        // transition only crossfades the chrome over a stable background.
+        <GlassRoot>
+          <View style={styles.appRoot}>
+            <PersistentBackdrop />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: 'transparent' },
+                animation: 'fade',
+              }}
+            />
+          </View>
+        </GlassRoot>
       )}
     </SafeAreaProvider>
   )
@@ -77,6 +89,9 @@ function BootMessage({
 }
 
 const styles = StyleSheet.create({
+  // Navy floor behind the persistent satellite photo (shows only in the
+  // moment before the image paints).
+  appRoot: { flex: 1, backgroundColor: colors.surfaceLowest },
   boot: {
     flex: 1,
     alignItems: 'center',

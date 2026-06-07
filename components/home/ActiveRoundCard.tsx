@@ -1,5 +1,14 @@
-import { useEffect, useState } from 'react'
-import { Animated, StyleSheet, Text, View } from 'react-native'
+import { useEffect } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
+import Animated, {
+  Easing,
+  FadeInDown,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated'
 
 import { Button } from '@/components/Button'
 import { GlassSurface } from '@/components/GlassSurface'
@@ -24,7 +33,12 @@ export function ActiveRoundCard() {
   const total = summary?.holeCount ?? 18
 
   return (
-    <View style={styles.section}>
+    <Animated.View
+      style={styles.section}
+      entering={FadeInDown.duration(300).withInitialValues({
+        transform: [{ translateY: 12 }],
+      })}
+    >
       {stale && (
         <GlassSurface
           dark={false}
@@ -62,44 +76,29 @@ export function ActiveRoundCard() {
           />
         </View>
       </GlassSurface>
-    </View>
+    </Animated.View>
   )
 }
 
 // A gold "live" dot with a soft glow, gently pulsing to read as active.
+// Reanimated loop on the UI thread — keeps pulsing smoothly regardless of JS.
 function PulseDot() {
-  const [anim] = useState(() => new Animated.Value(0))
+  const t = useSharedValue(0)
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(anim, {
-          toValue: 1,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-        Animated.timing(anim, {
-          toValue: 0,
-          duration: 900,
-          useNativeDriver: true,
-        }),
-      ]),
+    t.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 900, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
     )
-    loop.start()
-    return () => loop.stop()
-  }, [anim])
-  const opacity = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.45, 1],
-  })
-  const scale = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.85, 1.1],
-  })
-  return (
-    <Animated.View
-      style={[styles.pulseDot, { opacity, transform: [{ scale }] }]}
-    />
-  )
+  }, [t])
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: 0.45 + t.value * 0.55,
+    transform: [{ scale: 0.85 + t.value * 0.25 }],
+  }))
+  return <Animated.View style={[styles.pulseDot, animStyle]} />
 }
 
 function formatStarted(ts: number): string {

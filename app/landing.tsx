@@ -65,7 +65,9 @@ export default function LandingScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surfaceLowest },
+  // Transparent: the satellite backdrop is the persistent layer behind the
+  // router stack (app/_layout.tsx), not painted per-screen.
+  root: { flex: 1 },
   content: {
     flex: 1,
     alignItems: 'center',
@@ -101,6 +103,9 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
     letterSpacing: 5,
     marginTop: space.sm,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowRadius: 10,
+    textShadowOffset: { width: 0, height: 2 },
   },
   spacer: { flex: 1 },
   perm: {

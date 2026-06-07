@@ -1,8 +1,10 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import Animated, { FadeInDown } from 'react-native-reanimated'
 
 import { Button } from '@/components/Button'
 import { CourseThumbnail } from '@/components/CourseThumbnail'
 import { GlassSurface } from '@/components/GlassSurface'
+import { PressableScale } from '@/components/PressableScale'
 import { type CourseSummary } from '@/lib/course'
 import { colors, radius, space, type } from '@/lib/theme'
 import { usePrefetchStatus, type PrefetchStatus } from '@/lib/tiles'
@@ -20,9 +22,10 @@ export function CourseList() {
       {courses.length === 0 ? (
         <Text style={styles.dim}>No courses installed yet.</Text>
       ) : (
-        courses.map(c => (
+        courses.map((c, i) => (
           <CourseRow
             key={c.slug}
+            index={i}
             course={c}
             busy={busy}
             onStart={() => start(c.slug)}
@@ -36,12 +39,14 @@ export function CourseList() {
 }
 
 function CourseRow({
+  index,
   course,
   busy,
   onStart,
   onRemove,
   onRetry,
 }: {
+  index: number
   course: CourseSummary
   busy: boolean
   onStart: () => void
@@ -52,35 +57,43 @@ function CourseRow({
   const isReady = status?.satellite.state === 'complete'
 
   return (
-    <TouchableOpacity
-      activeOpacity={onRemove ? 0.9 : 1}
-      onLongPress={onRemove}
-      delayLongPress={500}
-      disabled={!onRemove}
+    // Gentle staggered fade-in as the list paints — eased slide, no spring
+    // bounce. [stagger 40–90ms] [duration 220–400ms] [rise 8–16px]
+    <Animated.View
+      entering={FadeInDown.delay(index * 60)
+        .duration(300)
+        .withInitialValues({ transform: [{ translateY: 12 }] })}
     >
-      <GlassSurface dark={false} rounded={radius['2xl']} style={styles.card}>
-        <CourseThumbnail slug={course.slug} />
-        <View style={styles.cardMeta}>
-          <Text style={styles.courseName} numberOfLines={1}>
-            {course.name}
-          </Text>
-          {!isReady && (
-            <ImageryChip
-              status={status}
-              installed={!!onRemove}
-              onRetry={onRetry}
-            />
-          )}
-        </View>
-        <Button
-          label="Start"
-          size="md"
-          variant={isReady ? 'primary' : 'ghost'}
-          onPress={onStart}
-          disabled={busy}
-        />
-      </GlassSurface>
-    </TouchableOpacity>
+      <PressableScale
+        onLongPress={onRemove}
+        delayLongPress={500}
+        disabled={!onRemove}
+        scaleTo={0.975}
+      >
+        <GlassSurface dark={false} rounded={radius['2xl']} style={styles.card}>
+          <CourseThumbnail slug={course.slug} />
+          <View style={styles.cardMeta}>
+            <Text style={styles.courseName} numberOfLines={1}>
+              {course.name}
+            </Text>
+            {!isReady && (
+              <ImageryChip
+                status={status}
+                installed={!!onRemove}
+                onRetry={onRetry}
+              />
+            )}
+          </View>
+          <Button
+            label="Start"
+            size="md"
+            variant={isReady ? 'primary' : 'ghost'}
+            onPress={onStart}
+            disabled={busy}
+          />
+        </GlassSurface>
+      </PressableScale>
+    </Animated.View>
   )
 }
 

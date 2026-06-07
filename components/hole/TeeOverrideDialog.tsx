@@ -3,6 +3,7 @@ import { Modal, Pressable, View, Text, StyleSheet } from 'react-native'
 import { distanceMeters } from '@/lib/geo'
 import { colors, fonts, radius, shadows, space, type } from '@/lib/theme'
 import { Button } from '@/components/Button'
+import { GlassSurface } from '@/components/GlassSurface'
 import { GolfTeeIcon } from '@/components/icons'
 
 import { useHoleScene } from './scene'
@@ -61,54 +62,72 @@ export function TeeOverrideDialog() {
         onPress={teeBusy ? undefined : closeTeeDialog}
       >
         {/* Inner press becomes the touch responder, so taps on the card don't
-            fall through to the dismiss-on-backdrop handler above. */}
-        <Pressable style={styles.card} onPress={() => {}}>
-          <View style={styles.header}>
-            <Text style={styles.eyebrow}>HOLE {currentHole.num} · TEE</Text>
-            {hasTeeOverride && (
-              <View style={styles.badge}>
-                <View style={styles.badgeDot} />
-                <Text style={styles.badgeText}>CORRECTED</Text>
+            fall through to the dismiss-on-backdrop handler above. The shadow
+            lives on this wrapper because the GlassSurface clips its contents
+            (overflow:hidden), which would swallow a shadow set on it directly. */}
+        <Pressable style={styles.cardWrap} onPress={() => {}}>
+          {/* Dark glass card. blur={false}: a Modal renders in a separate
+              native window, so the dimezis backdrop blur can't sample the hole
+              map across the window boundary — it would fall back to the fill
+              anyway. The 0.72 navy fill + border + top highlight give the glass
+              look without a no-op BlurView. */}
+          <GlassSurface
+            dark
+            blur={false}
+            rounded={radius['3xl']}
+            style={styles.card}
+          >
+            <View style={styles.header}>
+              <Text style={styles.eyebrow}>HOLE {currentHole.num} · TEE</Text>
+              {hasTeeOverride && (
+                <View style={styles.badge}>
+                  <View style={styles.badgeDot} />
+                  <Text style={styles.badgeText}>CORRECTED</Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={styles.title}>Correct tee position</Text>
+
+            {moveYards != null && (
+              <View style={styles.stat}>
+                <GolfTeeIcon
+                  width={26}
+                  height={26}
+                  color={colors.goldenEagle}
+                />
+                <View style={styles.statText}>
+                  <Text style={styles.statValue}>{moveYards}</Text>
+                  <Text style={styles.statUnit}>YDS</Text>
+                </View>
               </View>
             )}
-          </View>
 
-          <Text style={styles.title}>Correct tee position</Text>
+            <Text style={styles.caption}>{caption}</Text>
 
-          {moveYards != null && (
-            <View style={styles.stat}>
-              <GolfTeeIcon width={26} height={26} color={colors.goldenEagle} />
-              <View style={styles.statText}>
-                <Text style={styles.statValue}>{moveYards}</Text>
-                <Text style={styles.statUnit}>YDS</Text>
-              </View>
-            </View>
-          )}
-
-          <Text style={styles.caption}>{caption}</Text>
-
-          <View style={styles.actions}>
-            <Button
-              label={teeBusy ? 'Saving…' : 'Move tee here'}
-              onPress={handleMove}
-              variant="primary"
-              disabled={!position || teeBusy}
-            />
-            {hasTeeOverride && (
+            <View style={styles.actions}>
               <Button
-                label="Clear correction"
-                onPress={handleClear}
-                variant="secondary"
+                label={teeBusy ? 'Saving…' : 'Move tee here'}
+                onPress={handleMove}
+                variant="primary"
+                disabled={!position || teeBusy}
+              />
+              {hasTeeOverride && (
+                <Button
+                  label="Clear correction"
+                  onPress={handleClear}
+                  variant="secondary"
+                  disabled={teeBusy}
+                />
+              )}
+              <Button
+                label="Cancel"
+                onPress={closeTeeDialog}
+                variant="ghost"
                 disabled={teeBusy}
               />
-            )}
-            <Button
-              label="Cancel"
-              onPress={closeTeeDialog}
-              variant="ghost"
-              disabled={teeBusy}
-            />
-          </View>
+            </View>
+          </GlassSurface>
         </Pressable>
       </Pressable>
     </Modal>
@@ -123,16 +142,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: space.lg,
   },
-  card: {
+  // Sizing + shadow wrapper. The visual surface (fill, border, top highlight,
+  // rounded clip) is the GlassSurface inside; the shadow stays out here because
+  // GlassSurface clips its contents.
+  cardWrap: {
     width: '100%',
     maxWidth: 380,
-    backgroundColor: colors.surfaceHigh,
     borderRadius: radius['3xl'],
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.outlineVariant,
+    ...shadows.drawer,
+  },
+  card: {
     padding: space.lg,
     gap: space.md,
-    ...shadows.drawer,
   },
 
   header: {

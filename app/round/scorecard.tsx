@@ -261,7 +261,7 @@ function CenterMessage({ text, busy }: { text: string; busy?: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surfaceLowest },
+  root: { flex: 1 },
   kav: { flex: 1 },
   scroll: {
     padding: space.marginMobile,

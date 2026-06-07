@@ -6,6 +6,7 @@ import {
   Text,
   View,
 } from 'react-native'
+import Animated, { FadeInDown } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 
 import { GlassHeader } from '@/components/GlassHeader'
@@ -59,8 +60,13 @@ export default function HistoryScreen() {
             contentContainerStyle={styles.scroll}
             showsVerticalScrollIndicator={false}
           >
-            {summaries.map(s => (
-              <HistoryRow key={s.round.id} summary={s} courses={courses} />
+            {summaries.map((s, i) => (
+              <HistoryRow
+                key={s.round.id}
+                index={i}
+                summary={s}
+                courses={courses}
+              />
             ))}
           </ScrollView>
         )}
@@ -70,9 +76,11 @@ export default function HistoryScreen() {
 }
 
 function HistoryRow({
+  index,
   summary,
   courses,
 }: {
+  index: number
   summary: RoundSummary
   courses: CourseSummary[]
 }) {
@@ -80,25 +88,31 @@ function HistoryRow({
   const courseName =
     courses.find(c => c.slug === round.courseId)?.name ?? round.courseId
   return (
-    <GlassSurface dark={false} rounded={radius['2xl']} style={styles.row}>
-      <View style={styles.rowMain}>
-        <Text style={styles.rowCourse} numberOfLines={1}>
-          {courseName}
-        </Text>
-        <Text style={styles.rowDate}>{formatDate(round.startedAt)}</Text>
-        {scoreCount > 0 && scoreCount < 18 && (
-          <Text style={styles.rowPartial}>
-            {scoreCount} hole{scoreCount === 1 ? '' : 's'} entered
+    <Animated.View
+      entering={FadeInDown.delay(index * 50)
+        .duration(300)
+        .withInitialValues({ transform: [{ translateY: 12 }] })}
+    >
+      <GlassSurface dark={false} rounded={radius['2xl']} style={styles.row}>
+        <View style={styles.rowMain}>
+          <Text style={styles.rowCourse} numberOfLines={1}>
+            {courseName}
           </Text>
-        )}
-      </View>
-      <View style={styles.rowScore}>
-        <Text style={styles.rowScoreNum}>
-          {totalScore == null ? '—' : totalScore}
-        </Text>
-        <Text style={styles.rowScoreLabel}>SCORE</Text>
-      </View>
-    </GlassSurface>
+          <Text style={styles.rowDate}>{formatDate(round.startedAt)}</Text>
+          {scoreCount > 0 && scoreCount < 18 && (
+            <Text style={styles.rowPartial}>
+              {scoreCount} hole{scoreCount === 1 ? '' : 's'} entered
+            </Text>
+          )}
+        </View>
+        <View style={styles.rowScore}>
+          <Text style={styles.rowScoreNum}>
+            {totalScore == null ? '—' : totalScore}
+          </Text>
+          <Text style={styles.rowScoreLabel}>SCORE</Text>
+        </View>
+      </GlassSurface>
+    </Animated.View>
   )
 }
 
@@ -112,7 +126,7 @@ function formatDate(ts: number): string {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surfaceLowest },
+  root: { flex: 1 },
   scroll: {
     padding: space.marginMobile,
     paddingTop: space.md,

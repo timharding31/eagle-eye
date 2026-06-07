@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors, space, radius, type, shadows } from '@/lib/theme'
 import { GlassSurface } from '../GlassSurface'
 
-import { ArrowLeftCircleIcon } from 'lucide-react-native'
+import { ArrowLeftIcon } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 
 import { useHoleScene } from './scene'
@@ -12,7 +12,7 @@ import { IconButton } from '../Button'
 
 // Gap below the status bar before the floating header pill.
 // Status bar is transparent, so safe area is much larger than expected.
-const HEADER_TOP_GAP = -6
+const HEADER_TOP_GAP = 0
 
 const BUTTON_SIZE = 48
 
@@ -31,11 +31,7 @@ export function HoleHeader() {
     <View style={[styles.wrap, { top: insets.top + HEADER_TOP_GAP }]}>
       <IconButton
         glyph={
-          <ArrowLeftCircleIcon
-            width={26}
-            height={26}
-            color={colors.onSurface}
-          />
+          <ArrowLeftIcon width={26} height={26} color={colors.onSurface} />
         }
         onPress={() =>
           router.canGoBack() ? router.back() : router.replace('/' as never)
@@ -74,7 +70,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: space.sm,
+    paddingHorizontal: space.md,
   },
   // Border / radius / blur / top-highlight all come from GlassSurface; this
   // only carries padding and the lift shadow. Sizes to its content.

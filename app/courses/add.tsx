@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import Animated, { FadeInDown } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import * as Location from 'expo-location'
 
@@ -198,43 +199,49 @@ export default function AddCourseScreen() {
                   contribute the course data to OSM.
                 </Text>
               ) : (
-                phase.results.map(r => {
+                phase.results.map((r, i) => {
                   const slug = `osm-${r.osmType}-${r.osmId}`
                   const installed = installedIds.has(slug)
                   const installing = installingId === r.osmId
                   return (
-                    <GlassSurface
+                    <Animated.View
                       key={`${r.osmType}-${r.osmId}`}
-                      dark={false}
-                      rounded={radius['2xl']}
-                      style={styles.row}
+                      entering={FadeInDown.delay(i * 50)
+                        .duration(300)
+                        .withInitialValues({ transform: [{ translateY: 12 }] })}
                     >
-                      <View style={styles.rowMain}>
-                        <Text style={styles.rowName} numberOfLines={2}>
-                          {r.name}
-                        </Text>
-                        <Text style={styles.rowMeta}>
-                          {distanceLabel(r.distanceM)} away · OSM {r.osmType}{' '}
-                          {r.osmId}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[
-                          styles.installBtn,
-                          installed && styles.installBtnDone,
-                        ]}
-                        onPress={() => handleInstall(r)}
-                        disabled={installing || !!installingId}
+                      <GlassSurface
+                        dark={false}
+                        rounded={radius['2xl']}
+                        style={styles.row}
                       >
-                        {installing ? (
-                          <ActivityIndicator color={colors.primary} />
-                        ) : (
-                          <Text style={styles.installBtnText}>
-                            {installed ? '✓ INSTALLED' : 'INSTALL'}
+                        <View style={styles.rowMain}>
+                          <Text style={styles.rowName} numberOfLines={2}>
+                            {r.name}
                           </Text>
-                        )}
-                      </TouchableOpacity>
-                    </GlassSurface>
+                          <Text style={styles.rowMeta}>
+                            {distanceLabel(r.distanceM)} away · OSM {r.osmType}{' '}
+                            {r.osmId}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[
+                            styles.installBtn,
+                            installed && styles.installBtnDone,
+                          ]}
+                          onPress={() => handleInstall(r)}
+                          disabled={installing || !!installingId}
+                        >
+                          {installing ? (
+                            <ActivityIndicator color={colors.primary} />
+                          ) : (
+                            <Text style={styles.installBtnText}>
+                              {installed ? '✓ INSTALLED' : 'INSTALL'}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      </GlassSurface>
+                    </Animated.View>
                   )
                 })
               )}
@@ -271,7 +278,7 @@ function distanceLabel(meters: number): string {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surfaceLowest },
+  root: { flex: 1 },
   scroll: {
     padding: space.marginMobile,
     paddingTop: space.md,

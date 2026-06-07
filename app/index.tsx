@@ -53,6 +53,6 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surfaceLowest },
+  root: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 })

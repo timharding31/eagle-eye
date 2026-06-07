@@ -106,7 +106,11 @@ function CourseThumbnailImpl({
   return (
     <GlassSurface
       style={[styles.box, { width: size, height: size }]}
-      // blur={false}
+      // No backdrop blur: this is a tiny SVG box nested inside a glass card, and
+      // the dimezis blur re-captures the full screen per surface every frame —
+      // one per course row was a big chunk of the home-screen scroll cost. The
+      // translucent fill alone reads fine here.
+      blur={false}
     >
       {holes && holes.length > 0 ? (
         <Svg width={size} height={size} viewBox={`0 0 ${VIEW} ${VIEW}`}>

@@ -1,15 +1,27 @@
 import { ReactNode } from 'react'
 import {
   DimensionValue,
+  Pressable,
   StyleSheet,
   Text,
   TextStyle,
   TouchableOpacity,
   ViewStyle,
 } from 'react-native'
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated'
 
 import { colors, radius, shadows, space, type } from '@/lib/theme'
 import { GlassBackdrop } from './GlassSurface'
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable)
+
+// Shared spring for the press-down "juice" on buttons. [scale 0.92–0.99]
+const PRESS_SPRING = { damping: 15, stiffness: 320, mass: 0.5 }
+const PRESS_SCALE = 0.95
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'glass'
 type Size = 'md' | 'lg'
@@ -35,17 +47,31 @@ export function Button({
   style,
   children,
 }: ButtonProps) {
+  const pressed = useSharedValue(0)
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: withSpring(pressed.value ? PRESS_SCALE : 1, PRESS_SPRING) },
+    ],
+    opacity: pressed.value ? 0.9 : 1,
+  }))
+
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       onPress={onPress}
+      onPressIn={() => {
+        pressed.value = 1
+      }}
+      onPressOut={() => {
+        pressed.value = 0
+      }}
       disabled={disabled}
-      activeOpacity={0.85}
       style={[
         styles.base,
         sizeStyles[size],
         variantContainer[variant],
         disabled && styles.disabled,
         style,
+        animStyle,
       ]}
     >
       {variant === 'glass' && <GlassBackdrop />}
@@ -53,7 +79,7 @@ export function Button({
       {children || (
         <Text style={[styles.label, variantLabel[variant]]}>{label}</Text>
       )}
-    </TouchableOpacity>
+    </AnimatedPressable>
   )
 }
 

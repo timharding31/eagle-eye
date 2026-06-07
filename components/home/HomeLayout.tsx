@@ -56,7 +56,7 @@ export function HomeLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surfaceLowest },
+  root: { flex: 1 },
   flex: { flex: 1 },
   scroll: { padding: space.marginMobile, paddingTop: space.md, gap: space.md },
 
