@@ -226,6 +226,7 @@ const iconBtnStyles = StyleSheet.create({
   },
   large: {
     borderRadius: radius['2xl'],
+    padding: 12,
   },
   danger: { backgroundColor: colors.errorContainer },
   glass: {

@@ -6,7 +6,7 @@ tweak can be traced to a single file. It complements the module table in
 `PLANNING.md` (which maps domain capabilities to `lib/` modules); this one maps
 _pixels_ to `components/hole/`.
 
-![Hole view](screenshots/hole-view.png)
+![Hole view — hole camera with landing zone overlay](screenshots/hole-view-lz.jpeg) ![Hole view — green camera with F/C/B pill](screenshots/hole-view-green.jpeg)
 
 > The small gear glyph mid-right in the screenshot is the Expo/Metro **dev-menu
 > overlay**, not part of the app — it does not ship in a release build.

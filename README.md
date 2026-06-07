@@ -10,7 +10,20 @@ _Stand on the tee. Glance at your phone. Know the number._
 
 <br />
 
-<img src="docs/screenshots/hole-view.png" alt="Hole view — front/center/back distances over offline satellite imagery" width="280" />
+<table>
+<tr>
+<td align="center"><img src="docs/screenshots/splash.jpeg" alt="Splash screen" width="160" /></td>
+<td align="center"><img src="docs/screenshots/home-course-list.jpeg" alt="Course list" width="160" /></td>
+<td align="center"><img src="docs/screenshots/hole-view-lz.jpeg" alt="Hole view — hole camera, landing zone overlay" width="160" /></td>
+<td align="center"><img src="docs/screenshots/hole-view-green.jpeg" alt="Hole view — green camera, front/center/back distances" width="160" /></td>
+</tr>
+<tr>
+<td align="center"><sub>Launch</sub></td>
+<td align="center"><sub>Course list</sub></td>
+<td align="center"><sub>Landing zones</sub></td>
+<td align="center"><sub>On the green</sub></td>
+</tr>
+</table>
 
 </div>
 
@@ -23,6 +36,8 @@ Eagle Eye is a personal Android golf rangefinder — a fast, offline distance ap
 Point it at a hole and it tells you the **front, center, and back** of the green in yards — computed from your live position against real course geometry. Walk to your ball, glance down, hit your number.
 
 Built solo, for one golfer's bag, with the discipline of something much bigger.
+
+> A short walkthrough video is at [`docs/screenshots/signal-2026-06-07-002243.mp4`](docs/screenshots/signal-2026-06-07-002243.mp4).
 
 ## Why it's different
 

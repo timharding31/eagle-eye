@@ -30,7 +30,7 @@ export function HoleButtonStack() {
   const floatingBottom = insets.bottom + 108
 
   return (
-    <View style={[styles.iconButtons, { bottom: floatingBottom + 48 }]}>
+    <View style={[styles.iconButtons, { bottom: floatingBottom + 32 }]}>
       <IconButton
         glyph={
           <GolfTeeIcon
@@ -88,6 +88,6 @@ const styles = StyleSheet.create({
     display: 'flex',
     flexDirection: 'column-reverse',
     alignItems: 'flex-end',
-    gap: 16,
+    gap: space.md,
   },
 })
