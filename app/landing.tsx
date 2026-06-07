@@ -7,7 +7,8 @@ import * as Location from 'expo-location'
 import { Button } from '@/components/Button'
 import { EagleIcon } from '@/components/EagleIcon'
 import { MapBackdrop } from '@/components/MapBackdrop'
-import { colors, space, type } from '@/lib/theme'
+import { colors, radius, space, type } from '@/lib/theme'
+import { GlassSurface } from '@/components/GlassSurface'
 
 // First-launch onboarding (HANDOFF §4a). Reached from the home screen when the
 // location permission is still undetermined; "Get Started" requests it and
@@ -40,22 +41,11 @@ export default function LandingScreen() {
             { paddingTop: insets.top + 54, paddingBottom: insets.bottom + 30 },
           ]}
         >
-          <View style={styles.mark}>
+          <GlassSurface style={styles.mark} dark>
             <EagleIcon style={styles.logo} />
-          </View>
+          </GlassSurface>
           <Text style={styles.wordmark}>EAGLE EYE</Text>
           <Text style={styles.sublabel}>GOLF RANGEFINDER</Text>
-
-          <View style={styles.spacer} />
-
-          <Text style={styles.tagline}>
-            Stand on the tee.{'\n'}Know the{' '}
-            <Text style={styles.gold}>number</Text>.
-          </Text>
-          <Text style={styles.blurb}>
-            Front, center and back of every green — over real satellite imagery,
-            fully offline.
-          </Text>
 
           <View style={styles.spacer} />
 
@@ -85,12 +75,12 @@ const styles = StyleSheet.create({
     marginBottom: space.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 24,
+    borderRadius: radius['3xl'],
   },
   logo: {
-    width: 96,
-    height: 96,
-    // Soft glow so the mark lifts off the backdrop.
-    shadowColor: colors.goldenEagle,
+    width: 112,
+    height: 112,
     shadowOpacity: 0.5,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 6 },
@@ -104,38 +94,20 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowRadius: 10,
     textShadowOffset: { width: 0, height: 2 },
+    marginTop: space.md,
   },
   sublabel: {
     ...type.labelSm,
-    color: colors.goldenEagle,
+    color: colors.onSurface,
     letterSpacing: 5,
     marginTop: space.sm,
   },
   spacer: { flex: 1 },
-  tagline: {
-    fontFamily: 'Sora_700Bold',
-    fontSize: 27,
-    lineHeight: 34,
-    letterSpacing: -0.4,
-    textAlign: 'center',
-    color: colors.primary,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowRadius: 10,
-    textShadowOffset: { width: 0, height: 2 },
-    marginBottom: space.md,
-  },
-  gold: { color: colors.goldenEagle },
-  blurb: {
-    ...type.bodyMd,
-    textAlign: 'center',
-    color: colors.onSurfaceVariant,
-    maxWidth: 320,
-  },
   perm: {
-    ...type.labelXs,
+    ...type.labelSm,
     letterSpacing: 0.5,
     textTransform: 'none',
-    color: colors.onSurfaceVariant,
+    color: colors.onSurface,
     marginBottom: space.md,
     textAlign: 'center',
   },

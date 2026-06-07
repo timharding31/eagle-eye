@@ -12,7 +12,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react-native'
 
 import { Hole } from '@/lib/course'
 import { colors, radius, shadows, space, type } from '@/lib/theme'
-import { Button, IconButton } from '@/components/Button'
+import { IconButton } from '@/components/Button'
 
 import { useHoleScene } from './scene'
 import { GlassSurface } from '../GlassSurface'

@@ -22,7 +22,10 @@ export function HomeLayout() {
   return (
     <View style={styles.root}>
       <MapBackdrop>
-        <GlassHeader onMenuPress={() => router.push('/history' as never)} />
+        <GlassHeader
+          onLogoPress={() => router.push('/landing' as never)}
+          onMenuPress={() => router.push('/history' as never)}
+        />
         <ScrollView
           style={styles.flex}
           contentContainerStyle={styles.scroll}

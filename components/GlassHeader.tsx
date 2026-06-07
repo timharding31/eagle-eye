@@ -1,5 +1,5 @@
 import { ReactNode } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, MenuIcon } from 'lucide-react-native'
 
@@ -21,12 +21,14 @@ export function GlassHeader({
   title,
   subtitle,
   onMenuPress,
+  onLogoPress,
   right,
 }: {
   onBack?: () => void
   title?: string
   subtitle?: string
   onMenuPress?: () => void
+  onLogoPress?: () => void
   right?: ReactNode
 }) {
   const insets = useSafeAreaInsets()
@@ -58,6 +60,10 @@ export function GlassHeader({
           height={48}
           variant="ghost"
         />
+      ) : onLogoPress ? (
+        <Pressable onPress={onLogoPress} hitSlop={8}>
+          <EagleIcon style={styles.logo} />
+        </Pressable>
       ) : (
         <EagleIcon style={styles.logo} />
       )}
